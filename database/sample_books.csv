@@ -1,0 +1,5 @@
+title,author,isbn,category,year,description,copies_total,shelf_location
+Clean Code,Robert C. Martin,9780132350884,Computer Science,2008,A Handbook of Agile Software Craftsmanship,5,A1-CS
+Introduction to Algorithms,Thomas H. Cormen,9780262033848,Computer Science,2009,CLRS algorithms bible,3,A2-CS
+Pride and Prejudice,Jane Austen,9780141439518,Literature,1813,Classic novel,4,B1-LIT
+Linear Algebra Done Right,Sheldon Axler,9783319110790,Mathematics,2015,Linear algebra textbook,2,C1-MATH

@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Visible focus states (keyboard navigation) */
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Accessibility mode (high contrast + larger font) */
+html[data-a11y="on"] body {
+  font-size: 18px;
+  background: #0b1220;
+  color: #f8fafc;
+}
+
+html[data-a11y="on"] .a11y-surface {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+html[data-a11y="on"] .a11y-muted {
+  color: #cbd5e1;
+}
+
+html[data-a11y="on"] .a11y-input {
+  background: #0b1220;
+  color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+html[data-a11y="on"] .a11y-btn {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+html[data-a11y="on"] .a11y-outline {
+  border-color: #64748b;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
