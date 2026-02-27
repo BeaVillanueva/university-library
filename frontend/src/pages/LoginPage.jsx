@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
 import { FiEye, FiEyeOff } from "react-icons/fi";
 
 export default function LoginPage() {
   const { login, isAuthenticated, user, loading } = useAuth();
-  const { a11yMode } = useUi(); // kept for compatibility if other parts rely on UiContext
+  const { a11yMode } = useUi();
 
   const nav = useNavigate();
   const loc = useLocation();
-
   const from = useMemo(() => loc.state?.from || "/", [loc.state]);
 
   const [email, setEmail] = useState("admin@university.test");
@@ -48,7 +47,7 @@ export default function LoginPage() {
               ].join(" ")}
             >
               <div className="text-center">
-                <h1 className="text-xl font-semibold">Welcome Back</h1>
+                <h1 className="text-xl font-semibold">Cavite State University - Imus Campus</h1>
                 <p className="mt-1 text-sm text-white/80">Login to continue.</p>
               </div>
 
@@ -85,7 +84,6 @@ export default function LoginPage() {
                       aria-label="Password"
                     />
 
-                    {/* Hold-to-show button */}
                     <button
                       type="button"
                       className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-white/80 hover:text-white"
@@ -131,15 +129,15 @@ export default function LoginPage() {
                   {loading ? "Signing in…" : "Sign in"}
                 </button>
 
-                <div className="text-xs text-white/80">
-                  Demo accounts (from seeded DB):
-                  <ul className="mt-1 list-disc pl-5">
-                    <li>admin@university.test</li>
-                    <li>librarian@university.test</li>
-                    <li>student@university.test</li>
-                  </ul>
-                  Password: <span className="font-mono">Password123!</span>
+                <div className="flex items-center justify-between text-sm">
+                  <Link className="text-white/90 hover:underline" to="/register">
+                    Register
+                  </Link>
+                  <Link className="text-white/90 hover:underline" to="/forgot-password">
+                    Forgot password?
+                  </Link>
                 </div>
+
               </form>
             </div>
           </div>

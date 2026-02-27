@@ -15,8 +15,27 @@ export async function apiReportList(params) {
   return res.data;
 }
 
-// For export, easiest is open a new tab with the URL including token? But token is header.
-// We'll download using fetch with Authorization and create a blob.
+export async function apiReportsDistribution() {
+  const res = await http.get("/reports/distribution");
+  return res.data;
+}
+
+export async function apiReportsWeeklyBorrows() {
+  const res = await http.get("/reports/weekly-borrows");
+  return res.data;
+}
+
+export async function apiReportsMyWeeklyBorrows() {
+  const res = await http.get("/reports/my-weekly-borrows");
+  return res.data;
+}
+
+export async function apiReportsStudentStats() {
+  const res = await http.get("/reports/student-stats");
+  return res.data;
+}
+
+// Download CSV export (uses Authorization header)
 export async function apiExportReportCsv(params, token) {
   const url = new URL(http.defaults.baseURL + "/reports/export");
   Object.entries(params || {}).forEach(([k, v]) => {

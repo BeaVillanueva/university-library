@@ -1,0 +1,27 @@
+FEB 26
+*LOGIN WITH DATABASE
+-forgot password (email verification)
+-register
+ >student number (dapat no characters)
+ >password (must have eye)
+
+*HOME PAGE
+-ok, for improvement
+
+*ACTIVITY LOGS
+-time in/out of the students
+-Action/Role/Name
+ >new user
+ >admin - approval of students
+
+*BOOKS (CRUD)
+-add book form (isahan)
+
+----------------
+*USER MANAGEMENT
+-Create User
+ >input type (restrict)
+-
+
+
+

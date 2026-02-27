@@ -26,6 +26,8 @@ require_once __DIR__ . '/../src/Controllers/ImportController.php';
 require_once __DIR__ . '/../src/Controllers/BorrowController.php';
 require_once __DIR__ . '/../src/Controllers/ReportsController.php';
 
+require_once __DIR__ . '/../src/Utils/Text.php';
+
 $config = require __DIR__ . '/../config/config.php';
 
 Cors::handle($config['cors']);
@@ -61,6 +63,15 @@ $router->add('GET', '/health', function () {
  */
 $router->add('POST', '/auth/login', function () use ($pdo, $config) {
   AuthController::login($pdo, $config);
+});
+$router->add('POST', '/auth/register', function () use ($pdo, $config) {
+  AuthController::registerStudent($pdo, $config);
+});
+$router->add('POST', '/auth/forgot-password', function () use ($pdo, $config) {
+  AuthController::forgotPassword($pdo, $config);
+});
+$router->add('POST', '/auth/reset-password', function () use ($pdo, $config) {
+  AuthController::resetPassword($pdo, $config);
 });
 $router->add('GET', '/auth/me', function () use ($config) {
   $payload = AuthMiddleware::requireAuth($config);
@@ -165,6 +176,30 @@ $router->add('GET', '/reports/my-summary', function () use ($pdo, $config) {
   ReportsController::mySummary($pdo, $auth);
 });
 
+$router->add('GET', '/reports/distribution', function () use ($pdo, $config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
+  ReportsController::distribution($pdo, $auth);
+});
+
+$router->add('GET', '/reports/weekly-borrows', function () use ($pdo, $config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
+  ReportsController::weeklyBorrows($pdo, $auth);
+});
+
+$router->add('GET', '/reports/my-weekly-borrows', function () use ($pdo, $config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['student']);
+  ReportsController::myWeeklyBorrows($pdo, $auth);
+});
+
+$router->add('GET', '/reports/student-stats', function () use ($pdo, $config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  ReportsController::studentStats($pdo);
+});
+
 /**
  * Users (Admin only)
  */
@@ -172,6 +207,11 @@ $router->add('GET', '/users', function () use ($pdo, $config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin']);
   UsersController::list($pdo, $auth);
+});
+$router->add('GET', '/users/pending', function () use ($pdo, $config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin']);
+  UsersController::listPending($pdo, $auth);
 });
 $router->add('POST', '/users', function () use ($pdo, $config) {
   $auth = AuthMiddleware::requireAuth($config);
@@ -243,6 +283,24 @@ if ($method === 'POST') {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin','librarian']);
     BorrowController::returnBook($pdo, $auth, $rid);
+    exit;
+  }
+
+  // approve: POST /users/{id}/approve
+  $uid = Path::matchSuffixId($path, '/users/', '/approve');
+  if ($uid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin']);
+    UsersController::approve($pdo, $auth, $uid);
+    exit;
+  }
+
+  // NEW: decline: POST /users/{id}/decline
+  $uid2 = Path::matchSuffixId($path, '/users/', '/decline');
+  if ($uid2 !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin']);
+    UsersController::decline($pdo, $auth, $uid2);
     exit;
   }
 }

@@ -3,41 +3,30 @@ declare(strict_types=1);
 
 final class UsersController {
   public static function list(PDO $pdo, array $auth): void {
-    // Optional: log viewing users list (comment out if you don't want noise)
-    /*
-    ActivityLogger::log($pdo, [
-      'actor_user_id' => (int)($auth['user_id'] ?? 0) ?: null,
-      'action' => 'users.view_list',
-      'entity_type' => 'user',
-      'entity_id' => null,
-      'details' => [
-        'page' => Query::int('page', 1, 1),
-        'limit' => Query::int('limit', 10, 1, 100),
-        'q' => Query::str('q', ''),
-      ],
-    ]);
-    */
-
     $page = Query::int('page', 1, 1);
     $limit = Query::int('limit', 10, 1, 100);
     $q = Query::str('q', '');
 
     $offset = ($page - 1) * $limit;
 
-    $where = '';
+    // ✅ Always hide disabled accounts from "All Users"
+    $whereParts = ["status != 'disabled'"];
     $params = [];
+
     if ($q !== '') {
-      $where = "WHERE name LIKE ? OR email LIKE ? OR role LIKE ? OR department LIKE ? OR student_number LIKE ?";
+      $whereParts[] = "(name LIKE ? OR email LIKE ? OR role LIKE ? OR department LIKE ? OR student_number LIKE ?)";
       $like = '%' . $q . '%';
       $params = [$like, $like, $like, $like, $like];
     }
+
+    $where = 'WHERE ' . implode(' AND ', $whereParts);
 
     $countStmt = $pdo->prepare("SELECT COUNT(*) AS c FROM users $where");
     $countStmt->execute($params);
     $total = (int)($countStmt->fetch()['c'] ?? 0);
 
     $stmt = $pdo->prepare("
-      SELECT id, name, email, role, department, year_level, student_number, created_at
+      SELECT id, name, email, role, department, year_level, student_number, created_at, status
       FROM users
       $where
       ORDER BY id DESC
@@ -55,16 +44,98 @@ final class UsersController {
     ]);
   }
 
+  /**
+   * List pending student registrations (admin only).
+   */
+  public static function listPending(PDO $pdo, array $auth): void {
+    $stmt = $pdo->prepare("
+      SELECT id, name, email, role, department, year_level, student_number, created_at, status
+      FROM users
+      WHERE role = 'student' AND status = 'pending'
+      ORDER BY id DESC
+    ");
+    $stmt->execute();
+    $items = $stmt->fetchAll();
+    Http::ok(['items' => $items]);
+  }
+
+  /**
+   * Approve a pending student (admin only).
+   * Route: POST /users/{id}/approve
+   */
+  public static function approve(PDO $pdo, array $auth, int $id): void {
+    $actorId = (int)($auth['user_id'] ?? 0) ?: null;
+
+    $stmtOld = $pdo->prepare("SELECT id, email, role, status FROM users WHERE id = ? LIMIT 1");
+    $stmtOld->execute([$id]);
+    $old = $stmtOld->fetch();
+    if (!$old) Http::error('User not found', 404);
+
+    $pdo->prepare("UPDATE users SET status = 'approved' WHERE id = ?")->execute([$id]);
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => $actorId,
+      'action' => 'users.approve',
+      'entity_type' => 'user',
+      'entity_id' => $id,
+      'details' => [
+        'target_user_id' => $id,
+        'target_email' => (string)$old['email'],
+        'target_role' => (string)$old['role'],
+        'from_status' => (string)$old['status'],
+        'to_status' => 'approved',
+      ],
+    ]);
+
+    Http::ok(['message' => 'Approved']);
+  }
+
+  /**
+   * Decline a pending student (admin only).
+   * Route: POST /users/{id}/decline
+   * Sets status to 'disabled'
+   */
+  public static function decline(PDO $pdo, array $auth, int $id): void {
+    $actorId = (int)($auth['user_id'] ?? 0) ?: null;
+
+    $b = Http::readJsonBody();
+    $reason = array_key_exists('reason', $b) ? trim((string)$b['reason']) : '';
+
+    $stmtOld = $pdo->prepare("SELECT id, email, role, status FROM users WHERE id = ? LIMIT 1");
+    $stmtOld->execute([$id]);
+    $old = $stmtOld->fetch();
+    if (!$old) Http::error('User not found', 404);
+
+    $pdo->prepare("UPDATE users SET status = 'disabled' WHERE id = ?")->execute([$id]);
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => $actorId,
+      'action' => 'users.decline',
+      'entity_type' => 'user',
+      'entity_id' => $id,
+      'details' => [
+        'target_user_id' => $id,
+        'target_email' => (string)$old['email'],
+        'target_role' => (string)$old['role'],
+        'from_status' => (string)$old['status'],
+        'to_status' => 'disabled',
+        'reason' => $reason !== '' ? $reason : null,
+      ],
+    ]);
+
+    Http::ok(['message' => 'Declined']);
+  }
+
   public static function create(PDO $pdo, array $auth): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
     $b = Http::readJsonBody();
-    $name = trim((string)($b['name'] ?? ''));
+    // ✅ Title Case normalize
+    $name = Text::titleCaseName((string)($b['name'] ?? ''));
     $email = trim((string)($b['email'] ?? ''));
     $password = (string)($b['password'] ?? '');
     $role = (string)($b['role'] ?? 'student');
 
-    // Student fields
     $department = array_key_exists('department', $b) ? trim((string)$b['department']) : null;
     $yearLevel = array_key_exists('year_level', $b) ? (int)$b['year_level'] : null;
     $studentNumber = array_key_exists('student_number', $b) ? trim((string)$b['student_number']) : null;
@@ -112,7 +183,6 @@ final class UsersController {
       Http::error('Invalid role', 422);
     }
 
-    // Validate student-only fields
     if ($role === 'student') {
       if ($studentNumber === null || $studentNumber === '') Http::error('student_number is required for students', 422);
       if ($department === null || $department === '') Http::error('department is required for students', 422);
@@ -124,13 +194,14 @@ final class UsersController {
     }
 
     $hash = password_hash($password, PASSWORD_DEFAULT);
+    $status = 'approved';
 
     try {
       $stmt = $pdo->prepare("
-        INSERT INTO users (name, email, password_hash, role, department, year_level, student_number)
-        VALUES (?,?,?,?,?,?,?)
+        INSERT INTO users (name, email, password_hash, role, department, year_level, student_number, status)
+        VALUES (?,?,?,?,?,?,?,?)
       ");
-      $stmt->execute([$name, $email, $hash, $role, $department, $yearLevel, $studentNumber]);
+      $stmt->execute([$name, $email, $hash, $role, $department, $yearLevel, $studentNumber, $status]);
 
       $newId = (int)$pdo->lastInsertId();
 
@@ -147,6 +218,7 @@ final class UsersController {
           'target_department' => $department,
           'target_year_level' => $yearLevel,
           'target_student_number' => $studentNumber,
+          'status' => $status,
         ],
       ]);
 
@@ -170,22 +242,25 @@ final class UsersController {
   public static function update(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
-    // Fetch existing for logs
-    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number FROM users WHERE id = ? LIMIT 1");
+    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number, status FROM users WHERE id = ? LIMIT 1");
     $stmtOld->execute([$id]);
     $old = $stmtOld->fetch();
     if (!$old) Http::error('User not found', 404);
 
     $b = Http::readJsonBody();
-    $name = array_key_exists('name', $b) ? trim((string)$b['name']) : null;
+    $name = array_key_exists('name', $b) ? Text::titleCaseName((string)$b['name']) : null;
     $email = array_key_exists('email', $b) ? trim((string)$b['email']) : null;
     $role = array_key_exists('role', $b) ? (string)$b['role'] : null;
     $password = array_key_exists('password', $b) ? (string)$b['password'] : null;
 
-    // Student extra fields
     $department = array_key_exists('department', $b) ? trim((string)$b['department']) : null;
     $yearLevel = array_key_exists('year_level', $b) ? (int)$b['year_level'] : null;
     $studentNumber = array_key_exists('student_number', $b) ? trim((string)$b['student_number']) : null;
+
+    $status = array_key_exists('status', $b) ? trim((string)$b['status']) : null;
+    if ($status !== null && !in_array($status, ['pending', 'approved', 'disabled'], true)) {
+      Http::error('Invalid status', 422);
+    }
 
     if ($email !== null && $email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Invalid email', 422);
     if ($role !== null && !in_array($role, ['admin', 'librarian', 'student'], true)) Http::error('Invalid role', 422);
@@ -199,6 +274,7 @@ final class UsersController {
     if ($department !== null) { $fields[] = 'department = ?'; $params[] = $department; }
     if ($yearLevel !== null) { $fields[] = 'year_level = ?'; $params[] = $yearLevel; }
     if ($studentNumber !== null) { $fields[] = 'student_number = ?'; $params[] = $studentNumber; }
+    if ($status !== null) { $fields[] = 'status = ?'; $params[] = $status; }
 
     if ($password !== null && $password !== '') {
       $fields[] = 'password_hash = ?';
@@ -226,6 +302,7 @@ final class UsersController {
           'target_department' => $old['department'] ?? null,
           'target_year_level' => $old['year_level'] ?? null,
           'target_student_number' => $old['student_number'] ?? null,
+          'target_status' => $old['status'] ?? null,
           'changed' => [
             'name' => $name,
             'email' => $email,
@@ -233,6 +310,7 @@ final class UsersController {
             'department' => $department,
             'year_level' => $yearLevel,
             'student_number' => $studentNumber,
+            'status' => $status,
             'password_changed' => ($password !== null && $password !== ''),
           ],
         ],
@@ -258,8 +336,7 @@ final class UsersController {
   public static function delete(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
-    // Fetch existing for logs
-    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number FROM users WHERE id = ? LIMIT 1");
+    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number, status FROM users WHERE id = ? LIMIT 1");
     $stmtOld->execute([$id]);
     $old = $stmtOld->fetch();
 
@@ -280,6 +357,7 @@ final class UsersController {
         'target_department' => $old ? ($old['department'] ?? null) : null,
         'target_year_level' => $old ? ($old['year_level'] ?? null) : null,
         'target_student_number' => $old ? ($old['student_number'] ?? null) : null,
+        'target_status' => $old ? ($old['status'] ?? null) : null,
       ],
     ]);
 

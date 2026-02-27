@@ -80,6 +80,168 @@ final class ReportsController {
     ]);
   }
 
+  /**
+   * NEW: Pie chart distribution for Admin/Librarian.
+   * Uses your existing column names:
+   * - books.copies_available
+   * - borrow_records.status and borrow_records.return_date
+   */
+  public static function distribution(PDO $pdo, array $auth): void {
+    OverdueService::refresh($pdo);
+
+    $available = (int)($pdo->query("
+      SELECT COALESCE(SUM(copies_available), 0) AS s
+      FROM books
+    ")->fetch()['s'] ?? 0);
+
+    $borrowedActive = (int)($pdo->query("
+      SELECT COUNT(*) AS c
+      FROM borrow_records
+      WHERE status = 'borrowed' AND return_date IS NULL
+    ")->fetch()['c'] ?? 0);
+
+    $overdueActive = (int)($pdo->query("
+      SELECT COUNT(*) AS c
+      FROM borrow_records
+      WHERE status = 'overdue' AND return_date IS NULL
+    ")->fetch()['c'] ?? 0);
+
+    Http::ok([
+      'distribution' => [
+        'available' => $available,
+        'borrowed_active' => $borrowedActive,
+        'overdue_active' => $overdueActive,
+      ],
+    ]);
+  }
+
+  /**
+   * NEW: Weekly borrows trend (Admin/Librarian).
+   * Uses your existing column name borrow_records.borrow_date.
+   * Returns last 7 days including today.
+   */
+  public static function weeklyBorrows(PDO $pdo, array $auth): void {
+    $today = new DateTimeImmutable('today');
+
+    $start = $today->sub(new DateInterval('P6D'))->format('Y-m-d');
+    $end = $today->add(new DateInterval('P1D'))->format('Y-m-d'); // exclusive end
+
+    $stmt = $pdo->prepare("
+      SELECT DATE(borrow_date) AS d, COUNT(*) AS c
+      FROM borrow_records
+      WHERE borrow_date >= ? AND borrow_date < ?
+      GROUP BY DATE(borrow_date)
+      ORDER BY d ASC
+    ");
+    $stmt->execute([$start, $end]);
+    $rows = $stmt->fetchAll();
+
+    $map = [];
+    foreach ($rows as $r) {
+      $map[(string)$r['d']] = (int)$r['c'];
+    }
+
+    $labels = [];
+    $data = [];
+    for ($i = 6; $i >= 0; $i--) {
+      $day = $today->sub(new DateInterval('P' . $i . 'D'));
+      $key = $day->format('Y-m-d');
+      $labels[] = $day->format('D'); // Mon Tue...
+      $data[] = $map[$key] ?? 0;
+    }
+
+    Http::ok([
+      'trend' => [
+        'labels' => $labels,
+        'data' => $data,
+      ],
+    ]);
+  }
+
+  /**
+   * NEW: Weekly borrows trend for Student (only their borrows).
+   */
+  public static function myWeeklyBorrows(PDO $pdo, array $auth): void {
+    $userId = (int)($auth['user_id'] ?? 0);
+    if ($userId <= 0) Http::error('Invalid user', 401);
+
+    $today = new DateTimeImmutable('today');
+    $start = $today->sub(new DateInterval('P6D'))->format('Y-m-d');
+    $end = $today->add(new DateInterval('P1D'))->format('Y-m-d'); // exclusive end
+
+    $stmt = $pdo->prepare("
+      SELECT DATE(borrow_date) AS d, COUNT(*) AS c
+      FROM borrow_records
+      WHERE user_id = ? AND borrow_date >= ? AND borrow_date < ?
+      GROUP BY DATE(borrow_date)
+      ORDER BY d ASC
+    ");
+    $stmt->execute([$userId, $start, $end]);
+    $rows = $stmt->fetchAll();
+
+    $map = [];
+    foreach ($rows as $r) {
+      $map[(string)$r['d']] = (int)$r['c'];
+    }
+
+    $labels = [];
+    $data = [];
+    for ($i = 6; $i >= 0; $i--) {
+      $day = $today->sub(new DateInterval('P' . $i . 'D'));
+      $key = $day->format('Y-m-d');
+      $labels[] = $day->format('D');
+      $data[] = $map[$key] ?? 0;
+    }
+
+    Http::ok([
+      'trend' => [
+        'labels' => $labels,
+        'data' => $data,
+      ],
+    ]);
+  }
+
+    /**
+   * NEW: Student statistics (Admin/Librarian)
+   * - total approved students
+   * - approved students grouped by course/department
+   */
+  public static function studentStats(PDO $pdo): void {
+    // total approved students
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*) AS c
+      FROM users
+      WHERE role = 'student' AND status = 'approved'
+    ");
+    $stmt->execute();
+    $totalApproved = (int)($stmt->fetch()['c'] ?? 0);
+
+    // by course/department (approved students only)
+    $stmt2 = $pdo->prepare("
+      SELECT COALESCE(department,'(No department)') AS department, COUNT(*) AS c
+      FROM users
+      WHERE role = 'student' AND status = 'approved'
+      GROUP BY COALESCE(department,'(No department)')
+      ORDER BY c DESC, department ASC
+      LIMIT 20
+    ");
+    $stmt2->execute();
+    $rows = $stmt2->fetchAll();
+
+    $items = [];
+    foreach ($rows as $r) {
+      $items[] = [
+        'department' => (string)$r['department'],
+        'count' => (int)$r['c'],
+      ];
+    }
+
+    Http::ok([
+      'total_students_approved' => $totalApproved,
+      'students_by_course' => $items,
+    ]);
+  }
+
   public static function list(PDO $pdo): void {
     OverdueService::refresh($pdo);
 

@@ -1,6 +1,11 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+
 import LoginPage from "./pages/LoginPage.jsx";
+import RegisterStudentPage from "./pages/RegisterStudentPage.jsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
+
 import AppLayout from "./layout/AppLayout.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
@@ -26,8 +31,13 @@ import ActivityLogsPage from "./pages/ActivityLogsPage.jsx";
 export default function App() {
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterStudentPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+      {/* App routes */}
       <Route
         path="/"
         element={
@@ -75,6 +85,7 @@ export default function App() {
           }
         />
 
+        {/* ADMIN USERS (sub-routes) */}
         <Route
           path="admin/users"
           element={
@@ -83,6 +94,23 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="admin/users/pending"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/users/create"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="admin/categories"
           element={

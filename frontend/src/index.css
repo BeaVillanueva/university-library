@@ -2,15 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Default: slightly larger text for everyone (light + dark) */
+html {
+  font-size: 18px;
+}
+
 /* Visible focus states (keyboard navigation) */
 :focus-visible {
   outline: 3px solid #2563eb;
   outline-offset: 2px;
 }
 
-/* Accessibility mode (high contrast + larger font) */
+/* Accessibility mode (high contrast) */
 html[data-a11y="on"] body {
-  font-size: 18px;
   background: #0b1220;
   color: #f8fafc;
 }
