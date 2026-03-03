@@ -9,7 +9,6 @@ final class UsersController {
 
     $offset = ($page - 1) * $limit;
 
-    // ✅ Always hide disabled accounts from "All Users"
     $whereParts = ["status != 'disabled'"];
     $params = [];
 
@@ -26,7 +25,7 @@ final class UsersController {
     $total = (int)($countStmt->fetch()['c'] ?? 0);
 
     $stmt = $pdo->prepare("
-      SELECT id, name, email, role, department, year_level, student_number, created_at, status
+      SELECT id, name, email, role, department, student_number, created_at, status
       FROM users
       $where
       ORDER BY id DESC
@@ -44,12 +43,9 @@ final class UsersController {
     ]);
   }
 
-  /**
-   * List pending student registrations (admin only).
-   */
   public static function listPending(PDO $pdo, array $auth): void {
     $stmt = $pdo->prepare("
-      SELECT id, name, email, role, department, year_level, student_number, created_at, status
+      SELECT id, name, email, role, department, student_number, created_at, status
       FROM users
       WHERE role = 'student' AND status = 'pending'
       ORDER BY id DESC
@@ -59,10 +55,6 @@ final class UsersController {
     Http::ok(['items' => $items]);
   }
 
-  /**
-   * Approve a pending student (admin only).
-   * Route: POST /users/{id}/approve
-   */
   public static function approve(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
@@ -90,11 +82,6 @@ final class UsersController {
     Http::ok(['message' => 'Approved']);
   }
 
-  /**
-   * Decline a pending student (admin only).
-   * Route: POST /users/{id}/decline
-   * Sets status to 'disabled'
-   */
   public static function decline(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
@@ -130,14 +117,12 @@ final class UsersController {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
     $b = Http::readJsonBody();
-    // ✅ Title Case normalize
     $name = Text::titleCaseName((string)($b['name'] ?? ''));
     $email = trim((string)($b['email'] ?? ''));
     $password = (string)($b['password'] ?? '');
     $role = (string)($b['role'] ?? 'student');
 
     $department = array_key_exists('department', $b) ? trim((string)$b['department']) : null;
-    $yearLevel = array_key_exists('year_level', $b) ? (int)$b['year_level'] : null;
     $studentNumber = array_key_exists('student_number', $b) ? trim((string)$b['student_number']) : null;
 
     if ($name === '' || $email === '' || $password === '') {
@@ -186,11 +171,9 @@ final class UsersController {
     if ($role === 'student') {
       if ($studentNumber === null || $studentNumber === '') Http::error('student_number is required for students', 422);
       if ($department === null || $department === '') Http::error('department is required for students', 422);
-      if ($yearLevel === null || $yearLevel < 1 || $yearLevel > 6) Http::error('year_level must be 1-6', 422);
     } else {
       $studentNumber = null;
       $department = null;
-      $yearLevel = null;
     }
 
     $hash = password_hash($password, PASSWORD_DEFAULT);
@@ -198,10 +181,10 @@ final class UsersController {
 
     try {
       $stmt = $pdo->prepare("
-        INSERT INTO users (name, email, password_hash, role, department, year_level, student_number, status)
-        VALUES (?,?,?,?,?,?,?,?)
+        INSERT INTO users (name, email, password_hash, role, department, student_number, status)
+        VALUES (?,?,?,?,?,?,?)
       ");
-      $stmt->execute([$name, $email, $hash, $role, $department, $yearLevel, $studentNumber, $status]);
+      $stmt->execute([$name, $email, $hash, $role, $department, $studentNumber, $status]);
 
       $newId = (int)$pdo->lastInsertId();
 
@@ -216,7 +199,6 @@ final class UsersController {
           'target_email' => $email,
           'target_role' => $role,
           'target_department' => $department,
-          'target_year_level' => $yearLevel,
           'target_student_number' => $studentNumber,
           'status' => $status,
         ],
@@ -242,7 +224,7 @@ final class UsersController {
   public static function update(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
-    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number, status FROM users WHERE id = ? LIMIT 1");
+    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, student_number, status FROM users WHERE id = ? LIMIT 1");
     $stmtOld->execute([$id]);
     $old = $stmtOld->fetch();
     if (!$old) Http::error('User not found', 404);
@@ -254,7 +236,6 @@ final class UsersController {
     $password = array_key_exists('password', $b) ? (string)$b['password'] : null;
 
     $department = array_key_exists('department', $b) ? trim((string)$b['department']) : null;
-    $yearLevel = array_key_exists('year_level', $b) ? (int)$b['year_level'] : null;
     $studentNumber = array_key_exists('student_number', $b) ? trim((string)$b['student_number']) : null;
 
     $status = array_key_exists('status', $b) ? trim((string)$b['status']) : null;
@@ -272,7 +253,6 @@ final class UsersController {
     if ($email !== null) { $fields[] = 'email = ?'; $params[] = $email; }
     if ($role !== null) { $fields[] = 'role = ?'; $params[] = $role; }
     if ($department !== null) { $fields[] = 'department = ?'; $params[] = $department; }
-    if ($yearLevel !== null) { $fields[] = 'year_level = ?'; $params[] = $yearLevel; }
     if ($studentNumber !== null) { $fields[] = 'student_number = ?'; $params[] = $studentNumber; }
     if ($status !== null) { $fields[] = 'status = ?'; $params[] = $status; }
 
@@ -300,7 +280,6 @@ final class UsersController {
           'target_email' => (string)$old['email'],
           'target_role' => (string)$old['role'],
           'target_department' => $old['department'] ?? null,
-          'target_year_level' => $old['year_level'] ?? null,
           'target_student_number' => $old['student_number'] ?? null,
           'target_status' => $old['status'] ?? null,
           'changed' => [
@@ -308,7 +287,6 @@ final class UsersController {
             'email' => $email,
             'role' => $role,
             'department' => $department,
-            'year_level' => $yearLevel,
             'student_number' => $studentNumber,
             'status' => $status,
             'password_changed' => ($password !== null && $password !== ''),
@@ -336,7 +314,7 @@ final class UsersController {
   public static function delete(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
-    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, year_level, student_number, status FROM users WHERE id = ? LIMIT 1");
+    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, student_number, status FROM users WHERE id = ? LIMIT 1");
     $stmtOld->execute([$id]);
     $old = $stmtOld->fetch();
 
@@ -355,7 +333,6 @@ final class UsersController {
         'target_email' => $old ? (string)$old['email'] : null,
         'target_role' => $old ? (string)$old['role'] : null,
         'target_department' => $old ? ($old['department'] ?? null) : null,
-        'target_year_level' => $old ? ($old['year_level'] ?? null) : null,
         'target_student_number' => $old ? ($old['student_number'] ?? null) : null,
         'target_status' => $old ? ($old['status'] ?? null) : null,
       ],

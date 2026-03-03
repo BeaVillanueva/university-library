@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
-import { FiEye, FiEyeOff } from "react-icons/fi";
+import { FiEye, FiEyeOff, FiMail, FiLock } from "react-icons/fi";
 
 export default function LoginPage() {
   const { login, isAuthenticated, user, loading } = useAuth();
@@ -40,53 +40,67 @@ export default function LoginPage() {
           <div className="min-h-screen w-full grid place-items-center p-6">
             <div
               className={[
-                "w-full max-w-md rounded-2xl border border-white/25 p-6 shadow-2xl",
-                "bg-white/15 backdrop-blur-xl",
-                "text-white",
+                "w-full max-w-xl rounded-2xl border border-white/25 p-8 shadow-2xl",
+                "bg-white/10 backdrop-blur-2xl text-white",
                 a11yMode ? "a11y-outline" : ""
               ].join(" ")}
             >
               <div className="text-center">
-                <h1 className="text-xl font-semibold">Cavite State University - Imus Campus</h1>
+                <h1 className="text-2xl font-semibold">Cavite State University - Imus Campus</h1>
                 <p className="mt-1 text-sm text-white/80">Login to continue.</p>
               </div>
 
-              <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+              <form className="mt-7 space-y-5" onSubmit={onSubmit}>
+                {/* EMAIL */}
                 <div>
                   <label className="text-sm font-medium text-white/90" htmlFor="email">
                     Email
                   </label>
-                  <input
-                    id="email"
-                    className="mt-1 w-full rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
-                    required
-                    aria-label="Email address"
-                  />
+
+                  <div className="relative mt-1">
+                    <FiMail
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="email"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                      aria-label="Email address"
+                      placeholder="you@cvsu.edu.ph"
+                    />
+                  </div>
                 </div>
 
+                {/* PASSWORD */}
                 <div>
                   <label className="text-sm font-medium text-white/90" htmlFor="password">
                     Password
                   </label>
 
                   <div className="relative mt-1">
+                    <FiLock
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70"
+                      aria-hidden="true"
+                    />
                     <input
                       id="password"
                       type={showPw ? "text" : "password"}
-                      className="w-full rounded-lg border border-white/25 bg-white/10 px-3 py-2 pr-11 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="current-password"
                       required
                       aria-label="Password"
+                      placeholder="••••••••"
                     />
 
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-white/80 hover:text-white"
+                      className="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-white/80 hover:text-white"
                       aria-label="Hold to show password"
                       title="Hold to show password"
                       onMouseDown={() => setShowPw(true)}
@@ -113,7 +127,7 @@ export default function LoginPage() {
 
                 {error ? (
                   <div
-                    className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white"
+                    className="rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-3 text-sm text-white"
                     role="alert"
                     aria-live="polite"
                   >
@@ -122,7 +136,7 @@ export default function LoginPage() {
                 ) : null}
 
                 <button
-                  className="w-full rounded-lg bg-white/20 px-3 py-2 text-sm font-semibold text-white hover:bg-white/30 disabled:opacity-60"
+                  className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
                   disabled={loading}
                   aria-label="Sign in"
                 >
@@ -137,9 +151,10 @@ export default function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-
               </form>
             </div>
+
+            
           </div>
         </div>
       </div>

@@ -1,6 +1,17 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRegisterStudent } from "../api/auth";
+import { useUi } from "../state/UiContext";
+import {
+  FiEye,
+  FiEyeOff,
+  FiUser,
+  FiMail,
+  FiLock,
+  FiHash,
+  FiBookOpen,
+  FiLayers
+} from "react-icons/fi";
 
 const IMUS_COURSES = [
   "AB Journalism",
@@ -19,34 +30,24 @@ const IMUS_COURSES = [
 
 const EMAIL_DOMAIN = "@cvsu.edu.ph";
 
-// SQL/HTML injection related patterns you want to block
-const FORBIDDEN_PATTERNS = [
-  /'/, // single quote
-  /"/, // double quote
-  /;/, // end of SQL statement
-  /--/, // SQL comment
-  /</, // HTML injection
-  />/ // HTML injection
-];
+const FORBIDDEN_PATTERNS = [/'/, /"/, /;/, /--/, /</, />/];
 
 function hasForbiddenChars(value) {
   const v = String(value || "");
   return FORBIDDEN_PATTERNS.some((re) => re.test(v));
 }
 
-// Remove forbidden tokens from a string (so user can't type them)
 function sanitizeNoForbidden(value) {
   let v = String(value || "");
-  v = v.replace(/['";<>]/g, ""); // remove single forbidden chars
-  v = v.replace(/--/g, ""); // remove SQL comment token
+  v = v.replace(/['";<>]/g, "");
+  v = v.replace(/--/g, "");
   return v;
 }
 
-// Name rule: letters + spaces + dot + hyphen only (no numbers/special chars)
 function sanitizeName(value) {
   return String(value || "")
-    .replace(/[0-9]/g, "") // remove numbers
-    .replace(/[^a-zA-Z\s.-]/g, ""); // remove special chars except space . -
+    .replace(/[0-9]/g, "")
+    .replace(/[^a-zA-Z\s.-]/g, "");
 }
 
 function isValidName(value) {
@@ -55,25 +56,19 @@ function isValidName(value) {
   return /^[A-Za-z][A-Za-z\s.-]*$/.test(v);
 }
 
-// Student number rule (example): digits + hyphen only
-// "2026-00123" => allowed
 function sanitizeStudentNumber(value) {
   return String(value || "")
     .replace(/\s+/g, "")
-    .replace(/[^0-9-]/g, ""); // remove letters & special chars (keep digits and -)
+    .replace(/[^0-9-]/g, "");
 }
 
 function isValidStudentNumber(value) {
   const v = String(value || "").trim();
   if (!v) return false;
-  // Accept:
-  // - 5+ digits (e.g. 202600123)
-  // - or format ####-##### (e.g. 2026-00123)
   return /^(\d{5,}|\d{4}-\d{5})$/.test(v);
 }
 
 function sanitizeEmailLocalPart(value) {
-  // allow letters, numbers, dot, underscore, hyphen
   return String(value || "")
     .toLowerCase()
     .replace(/\s+/g, "")
@@ -81,6 +76,7 @@ function sanitizeEmailLocalPart(value) {
 }
 
 export default function RegisterStudentPage() {
+  const { a11yMode } = useUi();
   const nav = useNavigate();
   const courseOptions = useMemo(() => IMUS_COURSES, []);
 
@@ -90,9 +86,9 @@ export default function RegisterStudentPage() {
     password: "",
     student_number: "",
     department: "",
-    year_level: ""
   });
 
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -118,15 +114,11 @@ export default function RegisterStudentPage() {
     if (!form.student_number) return "Student number is required.";
     if (!isValidStudentNumber(form.student_number))
       return "Student number must be digits only (allowed: hyphen). Example: 2026-00123";
-    // keep as safety (should be impossible to type)
     if (hasForbiddenChars(form.student_number))
       return "Student number contains forbidden characters.";
 
     if (!form.department) return "Course is required.";
     if (hasForbiddenChars(form.department)) return "Course contains forbidden characters.";
-
-    const yl = Number(form.year_level);
-    if (!(yl >= 1 && yl <= 6)) return "Year level must be 1–6.";
 
     return "";
   }
@@ -150,7 +142,6 @@ export default function RegisterStudentPage() {
         password: form.password,
         student_number: form.student_number.trim(),
         department: form.department,
-        year_level: Number(form.year_level)
       });
 
       setNotice("Registration submitted. Please wait for admin approval.");
@@ -163,165 +154,202 @@ export default function RegisterStudentPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6 bg-slate-50">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
-        <h1 className="text-xl font-semibold">Student Registration</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          After registering, your account will be <b>pending</b> until approved by the admin.
-        </p>
-
-        <form className="mt-5 space-y-3" onSubmit={onSubmit}>
-          <Field label="Name">
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.name}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  name: sanitizeName(e.target.value).slice(0, 50)
-                })
-              }
-              required
-              maxLength={50}
-              aria-label="Full name"
-              placeholder="e.g. Juan D. Cruz"
-            />
-            <div className="mt-1 text-xs text-slate-500">{form.name.length}/50</div>
-          </Field>
-
-          <Field label="CVSU Email">
-            <div className="mt-1 flex overflow-hidden rounded-lg border border-slate-300">
-              <input
-                className="w-full px-3 py-2 text-sm outline-none"
-                value={form.emailLocal}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    emailLocal: sanitizeEmailLocalPart(e.target.value)
-                  })
-                }
-                required
-                aria-label="CVSU email local part"
-                placeholder="juan.delacruz"
-              />
-              <div className="border-l border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                {EMAIL_DOMAIN}
+    <div className="min-h-screen w-full">
+      <div
+        className="min-h-screen w-full bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url(/imus-campus.jpg)" }}
+      >
+        <div className="min-h-screen w-full bg-black/45">
+          <div className="min-h-screen w-full grid place-items-center p-6">
+            {/* ✅ made it "pahaba" by using max-w-md and 1-column layout */}
+            <div
+              className={[
+                "w-full max-w-md rounded-2xl border border-white/25 p-6 shadow-2xl",
+                "bg-white/15 backdrop-blur-xl text-white",
+                a11yMode ? "a11y-outline" : ""
+              ].join(" ")}
+            >
+              <div className="text-center">
+                <h1 className="text-xl font-semibold">Cavite State University - Imus Campus</h1>
+                <p className="mt-1 text-sm text-white/80">Register an Account</p>
               </div>
+
+              {/* ✅ 1 column */}
+              <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+                {/* Full Name */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="name">
+                    Full Name
+                  </label>
+                  <div className="relative mt-1">
+                    <FiUser className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <input
+                      id="name"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          name: sanitizeName(e.target.value).slice(0, 50)
+                        })
+                      }
+                      required
+                      maxLength={50}
+                      placeholder="e.g. Juan D. Cruz"
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-white/70">{form.name.length}/50</div>
+                </div>
+
+                {/* CVSU Email */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="emailLocal">
+                    CVSU Email
+                  </label>
+                  <div className="relative mt-1 flex overflow-hidden rounded-lg border border-white/25 bg-white/10">
+                    <FiMail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <input
+                      id="emailLocal"
+                      className="w-full bg-transparent py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none"
+                      value={form.emailLocal}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          emailLocal: sanitizeEmailLocalPart(e.target.value)
+                        })
+                      }
+                      required
+                      placeholder="juan.delacruz"
+                    />
+                    <div className="border-l border-white/20 bg-white/10 px-3 py-3 text-sm text-white/80">
+                      {EMAIL_DOMAIN}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="password">
+                    Password
+                  </label>
+                  <div className="relative mt-1">
+                    <FiLock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <input
+                      id="password"
+                      type={showPw ? "text" : "password"}
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          password: sanitizeNoForbidden(e.target.value)
+                        })
+                      }
+                      required
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-white/80 hover:text-white"
+                      aria-label="Hold to show password"
+                      title="Hold to show password"
+                      onMouseDown={() => setShowPw(true)}
+                      onMouseUp={() => setShowPw(false)}
+                      onMouseLeave={() => setShowPw(false)}
+                      onTouchStart={() => setShowPw(true)}
+                      onTouchEnd={() => setShowPw(false)}
+                      onTouchCancel={() => setShowPw(false)}
+                    >
+                      {showPw ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  <div className="mt-1 text-xs text-white/70">
+                    Forbidden: <span className="font-mono">' " ; -- &lt; &gt;</span>
+                  </div>
+                </div>
+
+                {/* Student Number */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="student_number">
+                    Student Number
+                  </label>
+                  <div className="relative mt-1">
+                    <FiHash className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <input
+                      id="student_number"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.student_number}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          student_number: sanitizeStudentNumber(sanitizeNoForbidden(e.target.value))
+                        })
+                      }
+                      required
+                      placeholder="e.g. 202600123"
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                {/* Department/Course */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="department">
+                    Department / Course (Imus Campus)
+                  </label>
+                  <div className="relative mt-1">
+                    <FiBookOpen className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <select
+                      id="department"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.department}
+                      onChange={(e) => setForm({ ...form, department: e.target.value })}
+                      required
+                    >
+                      <option value="" disabled className="text-slate-900">
+                        Select course
+                      </option>
+                      {courseOptions.map((c) => (
+                        <option key={c} value={c} className="text-slate-900">
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+
+                {notice ? (
+                  <div className="rounded-lg border border-emerald-200/30 bg-emerald-500/15 px-3 py-2 text-sm text-white">
+                    {notice}
+                  </div>
+                ) : null}
+                {error ? (
+                  <div className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white">
+                    {error}
+                  </div>
+                ) : null}
+
+                <button
+                  className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
+                  disabled={loading}
+                >
+                  {loading ? "Submitting…" : "Sign Up"}
+                </button>
+
+                <div className="text-center text-sm text-white/90">
+                  Already have an account?{" "}
+                  <Link className="text-white hover:underline" to="/login">
+                    Log in
+                  </Link>
+                </div>
+              </form>
             </div>
-          </Field>
 
-          <Field label="Password">
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.password}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  password: sanitizeNoForbidden(e.target.value)
-                })
-              }
-              required
-              minLength={8}
-              aria-label="Password"
-            />
-            <div className="mt-1 text-xs text-slate-500">
-              Forbidden: <span className="font-mono">' " ; -- &lt; &gt;</span>
-            </div>
-          </Field>
-
-          <Field label="Student Number">
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.student_number}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  student_number: sanitizeStudentNumber(sanitizeNoForbidden(e.target.value))
-                })
-              }
-              required
-              placeholder="e.g. 202600123"
-              aria-label="Student number"
-              inputMode="numeric"
-            />
-            <div className="mt-1 text-xs text-slate-500">
-              Digits only (hyphen allowed).
-            </div>
-          </Field>
-
-          <Field label="Department / Course (Imus Campus)">
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              required
-              aria-label="Course"
-            >
-              <option value="" disabled>
-                Select course
-              </option>
-              {courseOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Year Level">
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.year_level}
-              onChange={(e) => setForm({ ...form, year_level: e.target.value })}
-              required
-              aria-label="Year level"
-            >
-              <option value="" disabled>
-                Select year level
-              </option>
-              <option value="1">1st</option>
-              <option value="2">2nd</option>
-              <option value="3">3rd</option>
-              <option value="4">4th</option>
-            </select>
-          </Field>
-
-          {notice ? (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-              {notice}
-            </div>
-          ) : null}
-          {error ? (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
-
-          <button
-            className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading ? "Submitting…" : "Register"}
-          </button>
-
-          <div className="text-sm text-slate-600">
-            Already have an account?{" "}
-            <Link className="text-blue-700 hover:underline" to="/login">
-              Sign in
-            </Link>
+        
           </div>
-        </form>
+        </div>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <label className="text-sm font-medium">{label}</label>
-      {children}
     </div>
   );
 }

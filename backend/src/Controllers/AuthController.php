@@ -2,10 +2,6 @@
 declare(strict_types=1);
 
 final class AuthController {
-  /**
-   * Block these patterns in inputs to reduce injection attempts:
-   *  '  "  ;  --  <  >
-   */
   private static function hasForbidden(string $v): bool {
     return preg_match("/['\";<>]|--/", $v) === 1;
   }
@@ -24,26 +20,14 @@ final class AuthController {
     }
   }
 
-  /**
-   * Name rule:
-   * - max 50 chars
-   * - letters + space + dot + hyphen only
-   * - no numbers and no other special characters
-   */
   private static function ensureValidName(string $name): void {
     if (mb_strlen($name) > 50) Http::error('Name must be 50 characters or less', 422);
-
-    // allow letters + space + dot + hyphen only (no numbers/special chars)
     if (!preg_match('/^[A-Za-z][A-Za-z\s.-]*$/', $name)) {
       Http::error('Name must contain letters only (allowed: spaces, dot, hyphen)', 422);
     }
-
     self::ensureNoForbidden('Name', $name);
   }
 
-  /**
-   * Normalize names to Title Case for consistent storage.
-   */
   private static function titleCaseName(string $s): string {
     $str = trim($s);
     if ($str === '') return '';
@@ -163,36 +147,28 @@ final class AuthController {
 
     $studentNumber = trim((string)($b['student_number'] ?? ''));
     $department = trim((string)($b['department'] ?? ''));
-    $yearLevelRaw = $b['year_level'] ?? null;
-    $yearLevel = is_numeric($yearLevelRaw) ? (int)$yearLevelRaw : 0;
 
     if ($nameRaw === '' || $email === '' || $password === '') Http::error('name, email, password required', 422);
 
-    // Name restrictions
     self::ensureValidName($nameRaw);
-    $name = self::titleCaseName($nameRaw); // ✅ normalize before saving
+    $name = self::titleCaseName($nameRaw);
 
-    // Block forbidden chars in other inputs
     self::ensureNoForbidden('Email', $email);
     self::ensureNoForbidden('Student number', $studentNumber);
     self::ensureNoForbidden('Department', $department);
 
-    // Force CVSU email domain
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Invalid email', 422);
     if ($studentNumber === '') Http::error('student_number is required', 422);
     if ($department === '') Http::error('department is required', 422);
-    if ($yearLevel < 1 || $yearLevel > 6) Http::error('year_level must be 1-6', 422);
 
-    // Password: restrict forbidden characters too
     if (strlen($password) < 8) Http::error('Password must be at least 8 characters', 422);
     self::ensureNoForbidden('Password', $password);
 
     $hash = password_hash($password, PASSWORD_DEFAULT);
 
-    // ✅ If previously declined/disabled, allow re-register by reviving the record.
-    // Check by email OR student_number. Prefer email match if both exist.
+    // revive disabled student (by email OR student_number)
     $stmtExisting = $pdo->prepare("
       SELECT id, email, student_number, role, status
       FROM users
@@ -208,7 +184,6 @@ final class AuthController {
       $existingRole = (string)$existing['role'];
       $existingStatus = (string)$existing['status'];
 
-      // Only revive disabled student accounts
       if ($existingRole === 'student' && $existingStatus === 'disabled') {
         $stmtUpd = $pdo->prepare("
           UPDATE users
@@ -216,12 +191,11 @@ final class AuthController {
               email = ?,
               password_hash = ?,
               department = ?,
-              year_level = ?,
               student_number = ?,
               status = 'pending'
           WHERE id = ?
         ");
-        $stmtUpd->execute([$name, $email, $hash, $department, $yearLevel, $studentNumber, $existingId]);
+        $stmtUpd->execute([$name, $email, $hash, $department, $studentNumber, $existingId]);
 
         ActivityLogger::log($pdo, [
           'actor_user_id' => null,
@@ -233,7 +207,6 @@ final class AuthController {
             'target_email' => $email,
             'target_role' => 'student',
             'target_department' => $department,
-            'target_year_level' => $yearLevel,
             'target_student_number' => $studentNumber,
             'from_status' => 'disabled',
             'to_status' => 'pending',
@@ -247,17 +220,15 @@ final class AuthController {
         return;
       }
 
-      // If record exists but is not disabled student, block
       Http::error('Email or student number already exists', 409);
     }
 
-    // Otherwise insert new student
     try {
       $stmt = $pdo->prepare("
-        INSERT INTO users (name, email, password_hash, role, department, year_level, student_number, status)
-        VALUES (?,?,?,?,?,?,?,?)
+        INSERT INTO users (name, email, password_hash, role, department, student_number, status)
+        VALUES (?,?,?,?,?,?,?)
       ");
-      $stmt->execute([$name, $email, $hash, 'student', $department, $yearLevel, $studentNumber, 'pending']);
+      $stmt->execute([$name, $email, $hash, 'student', $department, $studentNumber, 'pending']);
 
       $newId = (int)$pdo->lastInsertId();
 
@@ -271,7 +242,6 @@ final class AuthController {
           'target_email' => $email,
           'target_role' => 'student',
           'target_department' => $department,
-          'target_year_level' => $yearLevel,
           'target_student_number' => $studentNumber,
           'status' => 'pending',
         ],
@@ -297,12 +267,13 @@ final class AuthController {
     self::ensureNoForbidden('Email', $email);
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
 
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, name FROM users WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
+    // Always return OK (prevents account enumeration)
     if (!$user) {
-      Http::ok(['message' => 'If that email exists, a reset link was generated.']);
+      Http::ok(['message' => 'If that email exists, we sent password reset instructions.']);
       return;
     }
 
@@ -313,6 +284,29 @@ final class AuthController {
     $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?,?,?)")
       ->execute([$email, password_hash($token, PASSWORD_DEFAULT), $expiresAt]);
 
+    $base = rtrim((string)($config['frontend']['base_url'] ?? ''), '/');
+    if ($base === '') {
+      Http::error('Server reset link is not configured', 500);
+    }
+
+    $resetLink = $base . '/reset-password?email=' . rawurlencode($email) . '&token=' . rawurlencode($token);
+
+    $subject = 'Reset your password';
+    $safeLink = htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8');
+    $html = '
+      <div style="font-family:Arial,sans-serif; line-height:1.6">
+        <h2>Password Reset</h2>
+        <p>We received a request to reset your password.</p>
+        <p>This link will expire in <b>30 minutes</b>.</p>
+        <p><a href="' . $safeLink . '">' . $safeLink . '</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    ';
+    $text = "Reset your password using this link (expires in 30 minutes):\n" . $resetLink;
+
+    // Send email (Gmail SMTP)
+    Mailer::send($config['smtp'], $email, (string)($user['name'] ?? ''), $subject, $html, $text);
+
     ActivityLogger::log($pdo, [
       'actor_user_id' => (int)$user['id'],
       'action' => 'auth.forgot_password',
@@ -320,13 +314,12 @@ final class AuthController {
       'entity_id' => (int)$user['id'],
       'details' => [
         'email' => $email,
+        'expires_at' => $expiresAt,
       ],
     ]);
 
     Http::ok([
-      'message' => 'Reset token generated (demo).',
-      'reset_token' => $token,
-      'expires_at' => $expiresAt,
+      'message' => 'If that email exists, we sent password reset instructions.'
     ]);
   }
 

@@ -1,9 +1,7 @@
 FEB 26
 *LOGIN WITH DATABASE
--forgot password (email verification)
--register
- >student number (dapat no characters)
- >password (must have eye)
+-forgot password (email verification) - done
+-reset link > after ma reset link babalik na sa login
 
 *HOME PAGE
 -ok, for improvement
@@ -22,6 +20,8 @@ FEB 26
 -Create User
  >input type (restrict)
 -
+
+
 
 
 

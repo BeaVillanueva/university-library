@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/Http.php';
 require_once __DIR__ . '/../src/Router.php';
 require_once __DIR__ . '/../src/Database.php';
@@ -27,6 +28,7 @@ require_once __DIR__ . '/../src/Controllers/BorrowController.php';
 require_once __DIR__ . '/../src/Controllers/ReportsController.php';
 
 require_once __DIR__ . '/../src/Utils/Text.php';
+require_once __DIR__ . '/../src/Utils/Mailer.php';
 
 $config = require __DIR__ . '/../config/config.php';
 

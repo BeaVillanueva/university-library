@@ -1,25 +1,47 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiForgotPassword } from "../api/auth";
+import { useUi } from "../state/UiContext";
+import { FiMail } from "react-icons/fi";
+
+function Modal({ title, message, confirmText = "OK", onConfirm }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-950/80 p-5 text-white shadow-2xl backdrop-blur-xl">
+        <div className="text-base font-semibold">{title}</div>
+        <div className="mt-2 text-sm text-white/85">{message}</div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            onClick={onConfirm}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ForgotPasswordPage() {
+  const { a11yMode } = useUi();
+  const nav = useNavigate();
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [token, setToken] = useState("");
+
+  const [successOpen, setSuccessOpen] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setError("");
-    setNotice("");
-    setToken("");
 
     setLoading(true);
     try {
-      const res = await apiForgotPassword(email);
-      setNotice(res?.message || "If that email exists, a reset token was generated.");
-      if (res?.reset_token) setToken(res.reset_token); // demo
+      await apiForgotPassword(email);
+      setSuccessOpen(true);
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Request failed");
     } finally {
@@ -28,54 +50,83 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6 bg-slate-50">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6">
-        <h1 className="text-xl font-semibold">Forgot Password</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Enter your email. For demo, a reset token will be shown.
-        </p>
+    <div className="min-h-screen w-full">
+      {successOpen ? (
+        <Modal
+          title="Reset link sent"
+          message="We sent password reset instructions. Please check your Inbox and Spam/Junk."
+          confirmText="OK"
+          onConfirm={() => {
+            setSuccessOpen(false);
+            nav("/login"); // ✅ go back to login after OK
+          }}
+        />
+      ) : null}
 
-        <form className="mt-5 space-y-3" onSubmit={onSubmit}>
-          <div>
-            <label className="text-sm font-medium">Email</label>
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          {notice ? <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{notice}</div> : null}
-          {error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-          {token ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-              <div className="font-semibold">Demo reset token:</div>
-              <div className="mt-1 font-mono break-all">{token}</div>
-              <div className="mt-2">
-                Go to{" "}
-                <Link className="text-blue-700 hover:underline" to="/reset-password">
-                  Reset Password
-                </Link>
+      <div
+        className="min-h-screen w-full bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url(/imus-campus.jpg)" }}
+      >
+        <div className="min-h-screen w-full bg-black/45">
+          <div className="min-h-screen w-full grid place-items-center p-6">
+            <div
+              className={[
+                "w-full max-w-md rounded-2xl border border-white/25 p-6 shadow-2xl",
+                "bg-white/15 backdrop-blur-xl text-white",
+                a11yMode ? "a11y-outline" : ""
+              ].join(" ")}
+            >
+              <div className="text-center">
+                <h1 className="text-xl font-semibold">Cavite State University - Imus Campus</h1>
+                <p className="mt-1 text-sm text-white/80">Forgot Password</p>
               </div>
+
+              <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="email">
+                    Email
+                  </label>
+                  <div className="relative mt-1">
+                    <FiMail
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="email"
+                      type="email"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                      placeholder="yourname@cvsu.edu.ph"
+                    />
+                  </div>
+                </div>
+
+                {error ? (
+                  <div className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white">
+                    {error}
+                  </div>
+                ) : null}
+
+                <button
+                  className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-2 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
+                  disabled={loading}
+                >
+                  {loading ? "Submitting…" : "Send reset link"}
+                </button>
+
+                <div className="text-sm text-white/90">
+                  Remembered your password?{" "}
+                  <Link className="text-white hover:underline" to="/login">
+                    Sign in
+                  </Link>
+                </div>
+              </form>
             </div>
-          ) : null}
-
-          <button
-            className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading ? "Submitting…" : "Send reset"}
-          </button>
-
-          <div className="text-sm text-slate-600">
-            Back to{" "}
-            <Link className="text-blue-700 hover:underline" to="/login">
-              Sign in
-            </Link>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

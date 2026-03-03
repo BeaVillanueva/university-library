@@ -59,14 +59,14 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // ✅ removed year_level everywhere
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     role: "student",
     student_number: "",
-    department: "",
-    year_level: ""
+    department: ""
   });
 
   const [loading, setLoading] = useState(false);
@@ -134,7 +134,7 @@ export default function AdminUsersPage() {
     if (form.role === "student") {
       payload.student_number = form.student_number?.trim();
       payload.department = form.department;
-      payload.year_level = Number(form.year_level);
+      // ✅ removed year_level from payload
     }
 
     try {
@@ -146,8 +146,7 @@ export default function AdminUsersPage() {
         password: "",
         role: "student",
         student_number: "",
-        department: "",
-        year_level: ""
+        department: ""
       });
 
       nav("/admin/users", { replace: true });
@@ -296,8 +295,9 @@ export default function AdminUsersPage() {
                     <div>
                       <div className="text-sm font-semibold">{p.name}</div>
                       <div className="text-xs text-slate-600 a11y-muted">{p.email}</div>
+                      {/* ✅ removed Year */}
                       <div className="text-xs text-slate-600 a11y-muted">
-                        {p.student_number} • {p.department} • Year {p.year_level}
+                        {p.student_number} • {p.department}
                       </div>
                     </div>
 
@@ -333,7 +333,9 @@ export default function AdminUsersPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-sm font-semibold">All Users</div>
-              <div className="text-xs text-slate-500 a11y-muted">Search by name/email/role.</div>
+              <div className="text-xs text-slate-500 a11y-muted">
+                Search by name/email/role.
+              </div>
             </div>
             <div className="w-56">
               <label className="text-xs text-slate-500 a11y-muted">Search</label>
@@ -357,7 +359,7 @@ export default function AdminUsersPage() {
                   <th className="px-3 py-2">Email</th>
                   <th className="px-3 py-2">Student #</th>
                   <th className="px-3 py-2">Department / Course</th>
-                  <th className="px-3 py-2">Year Level</th>
+                  {/* ✅ removed Year Level */}
                   <th className="px-3 py-2">Role</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2"></th>
@@ -366,13 +368,19 @@ export default function AdminUsersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-3 py-3 text-slate-600 a11y-muted" colSpan={8}>
+                    <td
+                      className="px-3 py-3 text-slate-600 a11y-muted"
+                      colSpan={7}
+                    >
                       Loading…
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-3 text-slate-600 a11y-muted" colSpan={8}>
+                    <td
+                      className="px-3 py-3 text-slate-600 a11y-muted"
+                      colSpan={7}
+                    >
                       No users.
                     </td>
                   </tr>
@@ -381,7 +389,6 @@ export default function AdminUsersPage() {
                     const isStudentRow = u.role === "student";
                     const studentNo = isStudentRow ? (u.student_number || "—") : "—";
                     const dept = isStudentRow ? (u.department || "—") : "—";
-                    const year = isStudentRow ? (u.year_level ?? "—") : "—";
 
                     return (
                       <tr key={u.id} className="border-t border-slate-100">
@@ -389,7 +396,7 @@ export default function AdminUsersPage() {
                         <td className="px-3 py-2 text-xs">{u.email}</td>
                         <td className="px-3 py-2 text-xs">{studentNo}</td>
                         <td className="px-3 py-2 text-xs">{dept}</td>
-                        <td className="px-3 py-2 text-xs">{year}</td>
+
                         <td className="px-3 py-2">
                           <select
                             className="rounded-lg border border-slate-300 px-2 py-1 text-xs shadow-sm a11y-input a11y-outline"
@@ -422,7 +429,11 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="mt-3">
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
         </div>
       ) : null}
@@ -470,7 +481,7 @@ export default function AdminUsersPage() {
                     ...prev,
                     role: e.target.value,
                     ...(e.target.value !== "student"
-                      ? { student_number: "", department: "", year_level: "" }
+                      ? { student_number: "", department: "" }
                       : {})
                   }))
                 }
@@ -487,7 +498,9 @@ export default function AdminUsersPage() {
                   <input
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm a11y-input a11y-outline"
                     value={form.student_number}
-                    onChange={(e) => setForm({ ...form, student_number: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, student_number: e.target.value })
+                    }
                     required
                   />
                 </Field>
@@ -496,7 +509,9 @@ export default function AdminUsersPage() {
                   <select
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm a11y-input a11y-outline"
                     value={form.department}
-                    onChange={(e) => setForm({ ...form, department: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, department: e.target.value })
+                    }
                     required
                   >
                     <option value="" disabled>
@@ -507,25 +522,6 @@ export default function AdminUsersPage() {
                         {c}
                       </option>
                     ))}
-                  </select>
-                </Field>
-
-                <Field label="Year Level">
-                  <select
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py--2 text-sm shadow-sm a11y-input a11y-outline"
-                    value={form.year_level}
-                    onChange={(e) => setForm({ ...form, year_level: e.target.value })}
-                    required
-                  >
-                    <option value="" disabled>
-                      Select year level
-                    </option>
-                    <option value="1">1st</option>
-                    <option value="2">2nd</option>
-                    <option value="3">3rd</option>
-                    <option value="4">4th</option>
-                    <option value="5">5th</option>
-                    <option value="6">6th</option>
                   </select>
                 </Field>
               </>

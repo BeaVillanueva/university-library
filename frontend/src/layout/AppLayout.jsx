@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
@@ -15,77 +15,63 @@ import {
   FiClock,
   FiSettings,
   FiFileText,
-  FiTool,
-  FiChevronLeft,
-  FiChevronRight,
   FiChevronDown,
   FiChevronUp,
-  FiUser,
-  FiLogOut
+  FiLogOut,
+  FiUser
 } from "react-icons/fi";
 
 const LS_SIDEBAR_COLLAPSED = "ulms_sidebar_collapsed";
 
-function LinkItem({
-  to,
-  label,
-  icon: Icon,
-  onNavigate,
-  collapsed,
-  end = false,
-  a11yMode
-}) {
+// gold/orange icons like reference
+const ICON_ACCENT = "text-[#d6a436]";
+
+function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false }) {
   const base =
-    "nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600";
+    "group relative flex items-center text-sm font-semibold transition " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
+    "h-11";
 
-  const normal = a11yMode
-    ? "text-slate-100 hover:bg-slate-800"
-    : "text-slate-700 hover:bg-slate-100";
+  const normal = "rounded-2xl text-white/85 hover:bg-white/10";
+  const active =
+    "rounded-l-2xl rounded-r-[26px] bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2";
 
-  const active = a11yMode
-    ? "bg-slate-800 text-white"
-    : "bg-blue-50 text-blue-700 a11y-btn";
+  const layout = collapsed ? "justify-center px-0" : "gap-3 px-4";
 
   return (
     <NavLink
       to={to}
       end={end}
       onClick={onNavigate}
-      className={({ isActive }) => [base, isActive ? active : normal].join(" ")}
+      className={({ isActive }) => [base, layout, isActive ? active : normal].join(" ")}
       aria-label={label}
       title={collapsed ? label : undefined}
     >
-      {Icon ? <Icon className="nav-icon h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+      {Icon ? (
+        <Icon
+          size={18}
+          className={[
+            "shrink-0 opacity-95 group-hover:opacity-100",
+            "group-[[aria-current=page]]:text-[#2f4f4c]",
+            ICON_ACCENT
+          ].join(" ")}
+          aria-hidden="true"
+        />
+      ) : null}
       <span className={collapsed ? "hidden" : "truncate"}>{label}</span>
     </NavLink>
   );
 }
 
-function SubLinkItem({
-  to,
-  label,
-  onNavigate,
-  collapsed,
-  end = false,
-  a11yMode,
-  badge
-}) {
+function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
   const base =
-    "nav-item flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm pl-10 " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600";
+    "group relative flex items-center justify-between gap-3 text-sm transition " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
+    "h-10";
 
-  const normal = a11yMode
-    ? "text-slate-200 hover:bg-slate-800"
-    : "text-slate-700 hover:bg-slate-100";
-
-  const active = a11yMode
-    ? "bg-slate-800 text-white"
-    : "bg-blue-50 text-blue-700 a11y-btn";
-
-  const badgeClass = a11yMode
-    ? "bg-slate-700 text-slate-100"
-    : "bg-slate-200 text-slate-800";
+  const normal = "rounded-2xl text-white/75 hover:bg-white/10";
+  const active =
+    "rounded-l-2xl rounded-r-[26px] bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2";
 
   const showBadge = !collapsed && badge !== undefined && badge !== null && badge > 0;
 
@@ -94,7 +80,11 @@ function SubLinkItem({
       to={to}
       end={end}
       onClick={onNavigate}
-      className={({ isActive }) => [base, isActive ? active : normal].join(" ")}
+      className={({ isActive }) =>
+        [base, collapsed ? "px-0 justify-center" : "px-4 pl-12", isActive ? active : normal].join(
+          " "
+        )
+      }
       aria-label={label}
       title={collapsed ? label : undefined}
     >
@@ -102,10 +92,7 @@ function SubLinkItem({
 
       {showBadge ? (
         <span
-          className={[
-            "min-w-[28px] rounded-full px-2 py-[2px] text-center text-xs font-semibold",
-            badgeClass
-          ].join(" ")}
+          className="min-w-[28px] rounded-full bg-white/20 px-2 py-[2px] text-center text-xs font-semibold text-white"
           aria-label={`${label} count ${badge}`}
         >
           {badge}
@@ -127,10 +114,7 @@ export default function AppLayout() {
     return raw === "1";
   });
 
-  const [usersOpen, setUsersOpen] = useState(() => {
-    return loc.pathname.startsWith("/admin/users");
-  });
-
+  const [usersOpen, setUsersOpen] = useState(() => loc.pathname.startsWith("/admin/users"));
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -152,7 +136,6 @@ export default function AppLayout() {
 
   const role = user?.role;
 
-  // Load pending approvals count (admin only)
   useEffect(() => {
     let cancelled = false;
 
@@ -176,47 +159,30 @@ export default function AppLayout() {
     };
   }, [role]);
 
-  // THEME classes (light vs dark sidebar)
-  const shellBg = a11yMode ? "bg-slate-950" : "bg-white";
-  const shellBorder = a11yMode ? "border-slate-800" : "border-slate-200";
-  const shellTextMuted = a11yMode ? "text-slate-400" : "text-slate-500";
-  const shellShadow = "shadow-md";
+  const appBg = a11yMode ? "bg-slate-950" : "bg-[#e9eff0]";
 
-  const collapseBtnBg = a11yMode
-    ? "bg-slate-900 text-slate-100 border-slate-700 hover:bg-slate-800"
-    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50";
-
-  const topBarBg = a11yMode ? "bg-slate-950 text-slate-100" : "bg-white";
-  const topBarBorder = a11yMode ? "border-slate-800" : "border-slate-200";
+  function onSidebarBackgroundClick(e) {
+    const interactive = e.target.closest("a,button,input,select,textarea,label");
+    if (interactive) return;
+    setCollapsed((v) => !v);
+  }
 
   return (
-    <div className="min-h-screen w-full">
+    <div className={["min-h-screen w-full", appBg].join(" ")}>
       {/* Mobile top bar */}
-      <header
-        className={[
-          "lg:hidden sticky top-0 z-30 border-b a11y-outline",
-          topBarBg,
-          topBarBorder
-        ].join(" ")}
-      >
+      <header className="lg:hidden sticky top-0 z-30 border-b border-black/10 bg-white/90 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
           <button
-            className={[
-              "rounded-lg border px-3 py-2 text-sm a11y-input a11y-outline",
-              collapseBtnBg
-            ].join(" ")}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             onClick={() => setOpen((s) => !s)}
             aria-label="Toggle navigation menu"
             type="button"
           >
             Menu
           </button>
-          <div className="text-sm font-semibold">University Library</div>
+          <div className="text-sm font-semibold text-slate-800">Menu</div>
           <button
-            className={[
-              "rounded-lg border px-3 py-2 text-sm a11y-input a11y-outline",
-              collapseBtnBg
-            ].join(" ")}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             onClick={toggleA11yMode}
             aria-pressed={a11yMode}
             aria-label="Toggle accessibility mode"
@@ -227,328 +193,170 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <div className="w-full">
-        <div className="flex min-h-[calc(100vh-0px)]">
-          <aside
-            className={[
-              collapsed ? "w-[76px]" : "w-[260px]",
-              "shrink-0 border-r",
-              shellBg,
-              shellBorder,
-              shellShadow,
-              "lg:sticky lg:top-0 lg:h-screen",
-              open ? "block" : "hidden lg:block"
-            ].join(" ")}
-            aria-label="Sidebar navigation"
+      <div className="flex min-h-screen w-full gap-6 p-0">
+        <aside
+          className={[
+            collapsed ? "w-[90px]" : "w-[300px]",
+            "shrink-0 h-screen sticky top-0",
+            open ? "block" : "hidden lg:block"
+          ].join(" ")}
+          aria-label="Sidebar navigation"
+        >
+          <div
+            className="h-full bg-[#2f4f4c] p-3 text-white shadow-xl flex flex-col rounded-r-[28px] overflow-x-hidden"
+            onClick={onSidebarBackgroundClick}
+            role="presentation"
           >
-            <div className="flex h-full flex-col p-4">
-              <div>
-                {/* Header row (desktop only) */}
-                <div className="hidden lg:flex items-center justify-between gap-2">
-                  <div className={collapsed ? "hidden" : ""}>
-                    <div
-                      className={[
-                        "text-sm font-semibold",
-                        a11yMode ? "text-slate-100" : "text-slate-900"
-                      ].join(" ")}
-                    >
-                      University Library
-                    </div>
-                    <div className={["text-xs a11y-muted", shellTextMuted].join(" ")}>
-                      Role: {user?.role}
-                    </div>
-                  </div>
-
-                  <div className="ml-auto flex items-center gap-2">
-                    {!collapsed ? (
-                      <button
-                        className={[
-                          "rounded-lg border px-2 py-1 text-xs a11y-input a11y-outline",
-                          collapseBtnBg
-                        ].join(" ")}
-                        onClick={toggleA11yMode}
-                        aria-pressed={a11yMode}
-                        aria-label="Toggle accessibility mode"
-                        type="button"
-                      >
-                        A11y
-                      </button>
-                    ) : null}
-
-                    <button
-                      className={[
-                        "rounded-lg border p-2 text-sm a11y-input a11y-outline",
-                        collapseBtnBg
-                      ].join(" ")}
-                      onClick={() => setCollapsed((v) => !v)}
-                      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                      aria-pressed={collapsed}
-                      title={collapsed ? "Expand" : "Collapse"}
-                      type="button"
-                    >
-                      {collapsed ? (
-                        <FiChevronRight className="h-5 w-5" aria-hidden="true" />
-                      ) : (
-                        <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <nav className="mt-4 space-y-1">
-                  <LinkItem
-                    to="/"
-                    end
-                    label="Dashboard"
-                    icon={FiHome}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                    a11yMode={a11yMode}
-                  />
-
-                  {role === "admin" ? (
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => setUsersOpen((v) => !v)}
-                        className={[
-                          "nav-item w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
-                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
-                          loc.pathname.startsWith("/admin/users")
-                            ? a11yMode
-                              ? "bg-slate-800 text-white"
-                              : "bg-blue-50 text-blue-700 a11y-btn"
-                            : a11yMode
-                              ? "text-slate-100 hover:bg-slate-800"
-                              : "text-slate-700 hover:bg-slate-100"
-                        ].join(" ")}
-                        aria-label="Users submenu"
-                        aria-expanded={usersOpen}
-                        title={collapsed ? "Users" : undefined}
-                      >
-                        <span className="flex items-center gap-3">
-                          <FiUsers
-                            className="nav-icon h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                          />
-                          <span className={collapsed ? "hidden" : "truncate"}>Users</span>
-                        </span>
-
-                        {collapsed ? null : usersOpen ? (
-                          <FiChevronUp className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <FiChevronDown className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </button>
-
-                      {usersOpen && !collapsed ? (
-                        <div className="mt-1 space-y-1">
-                          <SubLinkItem
-                            to="/admin/users/pending"
-                            label="Pending Approval"
-                            onNavigate={onNavigate}
-                            collapsed={collapsed}
-                            end
-                            a11yMode={a11yMode}
-                            badge={pendingCount}
-                          />
-                          <SubLinkItem
-                            to="/admin/users"
-                            label="All Users"
-                            onNavigate={onNavigate}
-                            collapsed={collapsed}
-                            end
-                            a11yMode={a11yMode}
-                          />
-                          <SubLinkItem
-                            to="/admin/users/create"
-                            label="Create User"
-                            onNavigate={onNavigate}
-                            collapsed={collapsed}
-                            end
-                            a11yMode={a11yMode}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {role === "admin" ? (
-                    <>
-                      <LinkItem
-                        to="/admin/categories"
-                        label="Categories"
-                        icon={FiGrid}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                      <LinkItem
-                        to="/admin/reports"
-                        label="Reports"
-                        icon={FiBarChart2}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                    </>
-                  ) : null}
-
-                  {role === "librarian" || role === "admin" ? (
-                    <>
-                      <LinkItem
-                        to="/librarian/import"
-                        label="Import Books (CSV)"
-                        icon={FiUpload}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                      <LinkItem
-                        to="/librarian/borrows"
-                        label="Borrow / Return"
-                        icon={FiRepeat}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                      <LinkItem
-                        to="/librarian/overdue"
-                        label="Overdue"
-                        icon={FiAlertTriangle}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                    </>
-                  ) : null}
-
-                  <LinkItem
-                    to="/books"
-                    label="Books"
-                    icon={FiBookOpen}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                    a11yMode={a11yMode}
-                  />
-                  <LinkItem
-                    to="/my/borrows"
-                    label="My History"
-                    icon={FiClock}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                    a11yMode={a11yMode}
-                  />
-                  <LinkItem
-                    to="/settings"
-                    label="Settings"
-                    icon={FiSettings}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                    a11yMode={a11yMode}
-                  />
-
-                  {role === "admin" || role === "librarian" ? (
-                    <>
-                      <LinkItem
-                        to="/activity-logs"
-                        label="Activity Logs"
-                        icon={FiFileText}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                      <LinkItem
-                        to="/dev"
-                        label="Dev Info"
-                        icon={FiTool}
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        a11yMode={a11yMode}
-                      />
-                    </>
-                  ) : null}
-                </nav>
+            {/* Profile: expanded shows name/email, collapsed shows circular icon */}
+            {collapsed ? (
+              <div className="mt-1 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => nav("/settings")}
+                  className="h-12 w-12 rounded-full bg-white/15 ring-2 ring-white/20 flex items-center justify-center hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  aria-label="Account settings"
+                  title="Account"
+                >
+                  <FiUser size={20} className="text-white/90" aria-hidden="true" />
+                </button>
               </div>
-
-              <div className="mt-auto pt-6">
-                {collapsed ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <button
-                      type="button"
-                      className={[
-                        "flex h-10 w-10 items-center justify-center rounded-full border bg-transparent a11y-outline",
-                        a11yMode
-                          ? "border-slate-700 text-slate-100 hover:bg-slate-900"
-                          : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                      ].join(" ")}
-                      title={user?.name ? `Account: ${user.name}` : "Account"}
-                      aria-label="Account (opens Settings)"
-                      onClick={() => setCollapsed(false)}
-                    >
-                      <FiUser className="h-5 w-5" aria-hidden="true" />
-                    </button>
-
-                    <button
-                      type="button"
-                      className={[
-                        "flex h-10 w-10 items-center justify-center rounded-full a11y-btn",
-                        a11yMode
-                          ? "bg-slate-100 text-slate-900 hover:bg-white"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
-                      ].join(" ")}
-                      onClick={handleLogout}
-                      title="Logout"
-                      aria-label="Logout"
-                    >
-                      <FiLogOut className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    className={[
-                      "rounded-xl border p-3 a11y-outline",
-                      a11yMode
-                        ? "border-slate-800 bg-slate-950 text-slate-100"
-                        : "border-slate-200 bg-white text-slate-900"
-                    ].join(" ")}
-                  >
-                    <div className={["text-xs a11y-muted", shellTextMuted].join(" ")}>
-                      Signed in as
+            ) : (
+              <div className="rounded-3xl bg-white/10 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-white/20 ring-2 ring-white/20" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold leading-tight">
+                      {user?.name || "User"}
                     </div>
-                    <div className="text-sm font-medium">{user?.name}</div>
-                    <div
-                      className={[
-                        "text-xs a11y-muted",
-                        a11yMode ? "text-slate-300" : "text-slate-600"
-                      ].join(" ")}
-                    >
+                    <div className="truncate text-xs text-white/70 leading-tight">
                       {user?.email}
                     </div>
-
-                    <button
-                      className={[
-                        "mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold a11y-btn",
-                        a11yMode
-                          ? "bg-slate-100 text-slate-900 hover:bg-white"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
-                      ].join(" ")}
-                      onClick={handleLogout}
-                      aria-label="Logout"
-                      type="button"
-                    >
-                      Logout
-                    </button>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          </aside>
+            )}
 
-          <main className="flex-1 min-w-0 p-4 lg:p-8">
+            {/* Navigation */}
+            <nav className="mt-3 space-y-1 flex-1 overflow-hidden px-1">
+              <LinkItem to="/" end label="Dashboard" icon={FiHome} onNavigate={onNavigate} collapsed={collapsed} />
+
+              {role === "admin" ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setUsersOpen((v) => !v)}
+                    className={[
+                      "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
+                      "rounded-2xl h-11",
+                      loc.pathname.startsWith("/admin/users")
+                        ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
+                        : "text-white/85 hover:bg-white/10"
+                    ].join(" ")}
+                    aria-label="Users submenu"
+                    aria-expanded={usersOpen}
+                    title={collapsed ? "Users" : undefined}
+                  >
+                    <span className={["flex items-center", collapsed ? "justify-center w-full" : "gap-3"].join(" ")}>
+                      <FiUsers size={18} className={ICON_ACCENT} aria-hidden="true" />
+                      <span className={collapsed ? "hidden" : "truncate"}>Users</span>
+                    </span>
+
+                    {collapsed ? null : usersOpen ? (
+                      <FiChevronUp className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <FiChevronDown className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </button>
+
+                  {usersOpen && !collapsed ? (
+                    <div className="mt-1 space-y-1">
+                      <SubLinkItem
+                        to="/admin/users/pending"
+                        label="Pending Approval"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                        badge={pendingCount}
+                      />
+                      <SubLinkItem to="/admin/users" label="All Users" onNavigate={onNavigate} collapsed={collapsed} end />
+                      <SubLinkItem
+                        to="/admin/users/create"
+                        label="Create User"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {role === "admin" ? (
+                <>
+                  <LinkItem to="/admin/categories" label="Categories" icon={FiGrid} onNavigate={onNavigate} collapsed={collapsed} />
+                  <LinkItem to="/admin/reports" label="Reports" icon={FiBarChart2} onNavigate={onNavigate} collapsed={collapsed} />
+                </>
+              ) : null}
+
+              {role === "librarian" || role === "admin" ? (
+                <>
+                  <LinkItem to="/librarian/import" label="Import Books (CSV)" icon={FiUpload} onNavigate={onNavigate} collapsed={collapsed} />
+                  <LinkItem to="/librarian/borrows" label="Borrow / Return" icon={FiRepeat} onNavigate={onNavigate} collapsed={collapsed} />
+                  <LinkItem to="/librarian/overdue" label="Overdue" icon={FiAlertTriangle} onNavigate={onNavigate} collapsed={collapsed} />
+                </>
+              ) : null}
+
+              <LinkItem to="/books" label="Books" icon={FiBookOpen} onNavigate={onNavigate} collapsed={collapsed} />
+              <LinkItem to="/my/borrows" label="My History" icon={FiClock} onNavigate={onNavigate} collapsed={collapsed} />
+              <LinkItem to="/settings" label="Settings" icon={FiSettings} onNavigate={onNavigate} collapsed={collapsed} />
+
+              {role === "admin" || role === "librarian" ? (
+                <LinkItem to="/activity-logs" label="Activity Logs" icon={FiFileText} onNavigate={onNavigate} collapsed={collapsed} />
+              ) : null}
+            </nav>
+
+            {/* Logout glow */}
+            <div className="pt-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className={[
+                  "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                  collapsed ? "px-3" : "",
+                  "bg-rose-50 text-rose-700 border border-rose-200",
+                  "shadow-[0_0_0_3px_rgba(244,63,94,0.18),0_10px_25px_rgba(244,63,94,0.15)]",
+                  "hover:bg-rose-100 hover:border-rose-300 hover:text-rose-800",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                ].join(" ")}
+                aria-label="Logout"
+                title={collapsed ? "Logout" : undefined}
+              >
+                <span className="flex items-center justify-center gap-3">
+                  <FiLogOut size={18} aria-hidden="true" />
+                  <span className={collapsed ? "hidden" : ""}>Logout</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
+          <div className="mb-4 flex items-center justify-end">
+            <button
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              onClick={toggleA11yMode}
+              aria-pressed={a11yMode}
+              aria-label="Toggle accessibility mode"
+              type="button"
+            >
+              A11y: {a11yMode ? "On" : "Off"}
+            </button>
+          </div>
+
+          <div className="rounded-[28px] bg-white p-4 shadow-sm lg:p-6 min-h-[calc(100vh-64px)]">
             <Outlet />
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     </div>
   );
