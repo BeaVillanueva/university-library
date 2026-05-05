@@ -37,7 +37,12 @@ final class ReportsController {
       Http::error('Invalid user', 401);
     }
 
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM borrow_records WHERE user_id = ?");
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*) AS c
+      FROM borrow_records
+      WHERE user_id = ?
+        AND status IN ('borrowed','overdue','returned')
+    ");
     $stmt->execute([$userId]);
     $myTotalBorrowed = (int)($stmt->fetch()['c'] ?? 0);
 

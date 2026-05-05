@@ -2,6 +2,94 @@
 declare(strict_types=1);
 
 final class AuthController {
+
+  public static function uploadAvatar(PDO $pdo, array $config, array $auth): void
+  {
+    $userId = $auth['id'] ?? $auth['user_id'] ?? null;
+    if (!$userId) {
+      Http::badRequest(['error' => 'Missing user id in token']);
+      return;
+    }
+
+    if (!isset($_FILES['avatar'])) {
+      Http::badRequest(['error' => 'No file uploaded. Field name must be "avatar".']);
+      return;
+    }
+
+    $f = $_FILES['avatar'];
+
+    if (($f['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+      Http::badRequest(['error' => 'Upload failed']);
+      return;
+    }
+
+    $tmp = $f['tmp_name'] ?? '';
+    if (!$tmp || !is_uploaded_file($tmp)) {
+      Http::badRequest(['error' => 'Invalid upload']);
+      return;
+    }
+
+    $maxBytes = 2 * 1024 * 1024;
+    $size = (int)($f['size'] ?? 0);
+    if ($size <= 0 || $size > $maxBytes) {
+      Http::badRequest(['error' => 'Image must be under 2MB']);
+      return;
+    }
+
+    $mime = '';
+    if (function_exists('finfo_open')) {
+      $fi = finfo_open(FILEINFO_MIME_TYPE);
+      if ($fi) {
+        $mime = (string)finfo_file($fi, $tmp);
+        finfo_close($fi);
+      }
+    }
+
+    $allowed = [
+      'image/jpeg' => 'jpg',
+      'image/png' => 'png',
+      'image/webp' => 'webp'
+    ];
+
+    if (!isset($allowed[$mime])) {
+      Http::badRequest(['error' => 'Only JPG, PNG, or WEBP allowed']);
+      return;
+    }
+
+    $ext = $allowed[$mime];
+
+    $publicDir = __DIR__ . '/../../public';
+    $dir = $publicDir . '/uploads/avatars';
+
+    if (!is_dir($dir)) {
+      @mkdir($dir, 0777, true);
+    }
+
+    $filename = 'user-' . $userId . '.' . $ext;
+    $dest = $dir . '/' . $filename;
+
+    if (!move_uploaded_file($tmp, $dest)) {
+      Http::serverError(['error' => 'Failed to save file']);
+      return;
+    }
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $basePath = rtrim($config['basePath'] ?? '', '/');
+    $avatarUrl = $scheme . '://' . $host . $basePath . '/uploads/avatars/' . $filename;
+
+    // optional DB save (ignore if column doesn't exist)
+    try {
+      $stmt = $pdo->prepare("UPDATE users SET avatar_url = :url WHERE id = :id");
+      $stmt->execute([':url' => $avatarUrl, ':id' => $userId]);
+    } catch (Throwable $e) {
+      // ignore
+    }
+
+    $auth['avatarUrl'] = $avatarUrl;
+    Http::ok(['user' => $auth]);
+  }
+
   private static function hasForbidden(string $v): bool {
     return preg_match("/['\";<>]|--/", $v) === 1;
   }
@@ -68,11 +156,90 @@ final class AuthController {
     self::ensureNoForbidden('Email', $email);
     self::ensureNoForbidden('Password', $password);
 
+    // ✅ Settings
+    $MAX_ATTEMPTS = 5;
+    $LOCK_MINUTES = 10;
+
+    // ✅ Check lock first (per email)
+    try {
+      $stmtLA = $pdo->prepare("
+        SELECT attempts, locked_until
+        FROM login_attempts
+        WHERE email = ?
+        LIMIT 1
+      ");
+      $stmtLA->execute([$email]);
+      $la = $stmtLA->fetch();
+
+      if ($la && !empty($la['locked_until'])) {
+        $lockedUntil = (string)$la['locked_until'];
+        if (strtotime($lockedUntil) > time()) {
+          $secondsLeft = strtotime($lockedUntil) - time();
+          $minutesLeft = (int)ceil($secondsLeft / 60);
+
+          ActivityLogger::log($pdo, [
+            'actor_user_id' => null,
+            'action' => 'auth.login_blocked',
+            'entity_type' => 'user',
+            'entity_id' => null,
+            'details' => [
+              'reason' => 'too_many_attempts',
+              'email' => $email,
+              'locked_until' => $lockedUntil,
+            ],
+          ]);
+
+          Http::error("Too many login attempts. Try again in about {$minutesLeft} minute(s).", 429, [
+            'locked_until' => $lockedUntil,
+            'minutes_left' => $minutesLeft
+          ]);
+        }
+      }
+    } catch (Throwable $e) {
+      // if limiter table missing, ignore
+    }
+
+    // normal auth
     $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role, status FROM users WHERE email = ? LIMIT 1');
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
-    if (!$user || !password_verify($password, (string)$user['password_hash'])) {
+    $valid = ($user && password_verify($password, (string)$user['password_hash']));
+
+    if (!$valid) {
+      // ✅ record failed attempt (per email)
+      try {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        // NOTE: ip value is optional now; keep it for debugging only
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+
+        $pdo->prepare("
+          INSERT INTO login_attempts (email, ip, attempts, locked_until, last_attempt_at)
+          VALUES (?,?,?,?,?)
+          ON DUPLICATE KEY UPDATE
+            attempts = attempts + 1,
+            ip = VALUES(ip),
+            last_attempt_at = VALUES(last_attempt_at),
+            updated_at = CURRENT_TIMESTAMP
+        ")->execute([$email, $ip, 1, null, $now]);
+
+        $stmt2 = $pdo->prepare("SELECT attempts FROM login_attempts WHERE email = ? LIMIT 1");
+        $stmt2->execute([$email]);
+        $attempts = (int)($stmt2->fetch()['attempts'] ?? 0);
+
+        if ($attempts >= $MAX_ATTEMPTS) {
+          $lockedUntil = (new DateTimeImmutable("+{$LOCK_MINUTES} minutes"))->format('Y-m-d H:i:s');
+          $pdo->prepare("
+            UPDATE login_attempts
+            SET locked_until = ?
+            WHERE email = ?
+          ")->execute([$lockedUntil, $email]);
+        }
+      } catch (Throwable $e) {
+        // ignore limiter errors
+      }
+
       ActivityLogger::log($pdo, [
         'actor_user_id' => $user ? (int)$user['id'] : null,
         'action' => 'auth.login_failed',
@@ -83,6 +250,7 @@ final class AuthController {
           'email' => $email,
         ],
       ]);
+
       Http::error('Invalid credentials', 401);
     }
 
@@ -100,6 +268,13 @@ final class AuthController {
         ],
       ]);
       Http::error('Account pending admin approval.', 403);
+    }
+
+    // ✅ success -> reset attempts for this email
+    try {
+      $pdo->prepare("DELETE FROM login_attempts WHERE email = ?")->execute([$email]);
+    } catch (Throwable $e) {
+      // ignore
     }
 
     $now = time();
@@ -369,5 +544,23 @@ final class AuthController {
     ]);
 
     Http::ok(['message' => 'Password reset successful.']);
+  }
+
+  public static function logout(PDO $pdo, array $config): void {
+    $auth = AuthMiddleware::requireAuth($config);
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => (int)($auth['user_id'] ?? 0) ?: null,
+      'action' => 'auth.logout',
+      'entity_type' => 'user',
+      'entity_id' => (int)($auth['user_id'] ?? 0) ?: null,
+      'details' => [
+        'email' => (string)($auth['email'] ?? ''),
+        'role' => (string)($auth['role'] ?? ''),
+      ],
+    ]);
+
+    // Stateless JWT: nothing to invalidate server-side
+    Http::ok(['message' => 'Logged out']);
   }
 }

@@ -1,5 +1,12 @@
 import { http } from "./http";
 
+// ...existing exports like apiListBooks...
+
+export async function apiAddBookStock(bookId, qty) {
+  const res = await http.post(`/books/${bookId}/stock`, { qty });
+  return res.data;
+}
+
 export async function apiListBooks(params) {
   const res = await http.get("/books", { params });
   return res.data;

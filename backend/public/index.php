@@ -1,6 +1,31 @@
 <?php
 declare(strict_types=1);
 
+// ---- CORS quick-guard (must run before any output) ----
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowed = ['http://localhost:5173'];
+
+if ($origin && in_array($origin, $allowed, true)) {
+  header("Access-Control-Allow-Origin: {$origin}");
+  header("Vary: Origin");
+  header("Access-Control-Allow-Credentials: true");
+}
+
+header("Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Max-Age: 86400");
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
+// ---- end CORS guard ----
+
+// ✅ TEMP DEBUG (remove later if you want)
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/Http.php';
 require_once __DIR__ . '/../src/Router.php';
@@ -31,13 +56,27 @@ require_once __DIR__ . '/../src/Utils/Text.php';
 require_once __DIR__ . '/../src/Utils/Mailer.php';
 
 $config = require __DIR__ . '/../config/config.php';
-
-Cors::handle($config['cors']);
-
-$db = new Database($config['db']);
-$pdo = $db->pdo();
+Cors::handle($config['cors'] ?? []);
 
 $router = new Router();
+
+/**
+ * ✅ Health (NO DB connection needed)
+ */
+$router->add('GET', '/health', function () {
+  Http::ok(['message' => 'API is healthy']);
+});
+
+/**
+ * ✅ Lazy PDO connection (connect only when a route actually needs DB)
+ */
+function pdo(array $config): PDO {
+  static $pdo = null;
+  if ($pdo instanceof PDO) return $pdo;
+  $db = new Database($config['db']);
+  $pdo = $db->pdo();
+  return $pdo;
+}
 
 /**
  * IMPORTANT:
@@ -53,38 +92,41 @@ if ($basePath && str_starts_with($path, $basePath)) {
   $path = substr($path, strlen($basePath)) ?: '/';
 }
 
-/**
- * Health
- */
-$router->add('GET', '/health', function () {
-  Http::ok(['message' => 'API is healthy']);
-});
+// ✅ support calling via /index.php/route
+if (str_starts_with($path, '/index.php')) {
+  $path = substr($path, strlen('/index.php')) ?: '/';
+}
 
 /**
  * Auth
  */
-$router->add('POST', '/auth/login', function () use ($pdo, $config) {
-  AuthController::login($pdo, $config);
+$router->add('POST', '/auth/login', function () use ($config) {
+  AuthController::login(pdo($config), $config);
 });
-$router->add('POST', '/auth/register', function () use ($pdo, $config) {
-  AuthController::registerStudent($pdo, $config);
+$router->add('POST', '/auth/register', function () use ($config) {
+  AuthController::registerStudent(pdo($config), $config);
 });
-$router->add('POST', '/auth/forgot-password', function () use ($pdo, $config) {
-  AuthController::forgotPassword($pdo, $config);
+$router->add('POST', '/auth/forgot-password', function () use ($config) {
+  AuthController::forgotPassword(pdo($config), $config);
 });
-$router->add('POST', '/auth/reset-password', function () use ($pdo, $config) {
-  AuthController::resetPassword($pdo, $config);
+$router->add('POST', '/auth/reset-password', function () use ($config) {
+  AuthController::resetPassword(pdo($config), $config);
 });
 $router->add('GET', '/auth/me', function () use ($config) {
   $payload = AuthMiddleware::requireAuth($config);
   Http::ok(['user' => $payload]);
 });
+$router->add('POST', '/auth/logout', function () use ($config) {
+  AuthController::logout(pdo($config), $config);
+});
 
 /**
  * Activity Logs (Admin + Librarian)
  */
-$router->add('GET', '/activity-logs', function () use ($pdo, $config) {
-  ActivityLogsController::list($pdo, $config);
+$router->add('GET', '/activity-logs', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  ActivityLogsController::list(pdo($config), $config);
 });
 
 /**
@@ -92,133 +134,132 @@ $router->add('GET', '/activity-logs', function () use ($pdo, $config) {
  * - list is allowed for authenticated users (for filters/forms)
  * - create/update/delete are admin only
  */
-$router->add('GET', '/categories', function () use ($pdo, $config) {
+$router->add('GET', '/categories', function () use ($config) {
   AuthMiddleware::requireAuth($config);
-  CategoriesController::list($pdo);
+  CategoriesController::list(pdo($config));
 });
-$router->add('POST', '/categories', function () use ($pdo, $config) {
+$router->add('POST', '/categories', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin']);
-  CategoriesController::create($pdo);
+  CategoriesController::create(pdo($config));
 });
 
 /**
  * Books
  * - list/get: any authenticated
- * - update: admin/librarian
- * - create: NOT exposed (import only)
+ * - create/update/addStock: admin/librarian
  */
-$router->add('GET', '/books', function () use ($pdo, $config) {
+$router->add('GET', '/books', function () use ($config) {
   AuthMiddleware::requireAuth($config);
-  BooksController::list($pdo);
+  BooksController::list(pdo($config));
 });
+
+// ✅ FIX: allow manual add (create)
+$router->add('POST', '/books', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  BooksController::create(pdo($config), $auth);
+});
+
 $router->add('GET', '/books/_', function () { /* placeholder */ });
 
 /**
  * Borrowing
- * - student can borrow
- * - librarian/admin can list all and return
+ * - student can borrow (request -> pending)
+ * - librarian can list all + approve/decline/return
+ * - admin can view all (list only)
  * - student can view their history
  */
-$router->add('POST', '/borrow', function () use ($pdo, $config) {
+$router->add('POST', '/borrow', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['student','admin','librarian']);
-  BorrowController::borrow($pdo, $config, $auth);
+  AuthMiddleware::requireRole($auth, ['student']); // ✅ student-only
+  BorrowController::borrow(pdo($config), $config, $auth);
 });
-$router->add('GET', '/borrow/my', function () use ($pdo, $config) {
+$router->add('GET', '/borrow/my', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  BorrowController::myHistory($pdo, $auth);
+  BorrowController::myHistory(pdo($config), $auth);
 });
-$router->add('GET', '/borrow/all', function () use ($pdo, $config) {
+$router->add('GET', '/borrow/all', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin','librarian']);
-  BorrowController::listAll($pdo);
+  BorrowController::listAll(pdo($config), $auth);
 });
 
 /**
- * Import (Librarian/Admin)
+ * Import (Librarian ONLY)
  */
-$router->add('POST', '/import/books/preview', function () use ($pdo, $config) {
+$router->add('POST', '/import/books/preview', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin','librarian']);
-  ImportController::preview($pdo, $auth);
+  AuthMiddleware::requireRole($auth, ['librarian']);
+  ImportController::preview(pdo($config), $auth);
 });
-$router->add('POST', '/import/books/commit', function () use ($pdo, $config) {
+$router->add('POST', '/import/books/commit', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin','librarian']);
-  ImportController::commit($pdo, $auth);
+  AuthMiddleware::requireRole($auth, ['librarian']);
+  ImportController::commit(pdo($config), $auth);
 });
 
 /**
  * Reports
- * - summary: Admin + Librarian (for dashboard KPIs)
- * - list/export: Admin only
  */
-$router->add('GET', '/reports/summary', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin','librarian']); // <-- changed
-  ReportsController::summary($pdo);
-});
-
-$router->add('GET', '/reports', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin']); // keep admin only
-  ReportsController::list($pdo);
-});
-
-$router->add('GET', '/reports/export', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin']); // keep admin only
-  ReportsController::exportCsv($pdo);
-});
-
-$router->add('GET', '/reports/my-summary', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['student']);
-  ReportsController::mySummary($pdo, $auth);
-});
-
-$router->add('GET', '/reports/distribution', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
-  ReportsController::distribution($pdo, $auth);
-});
-
-$router->add('GET', '/reports/weekly-borrows', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
-  ReportsController::weeklyBorrows($pdo, $auth);
-});
-
-$router->add('GET', '/reports/my-weekly-borrows', function () use ($pdo, $config) {
-  $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['student']);
-  ReportsController::myWeeklyBorrows($pdo, $auth);
-});
-
-$router->add('GET', '/reports/student-stats', function () use ($pdo, $config) {
+$router->add('GET', '/reports/summary', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin','librarian']);
-  ReportsController::studentStats($pdo);
+  ReportsController::summary(pdo($config));
+});
+$router->add('GET', '/reports', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin']);
+  ReportsController::list(pdo($config));
+});
+$router->add('GET', '/reports/export', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin']);
+  ReportsController::exportCsv(pdo($config));
+});
+$router->add('GET', '/reports/my-summary', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['student']);
+  ReportsController::mySummary(pdo($config), $auth);
+});
+$router->add('GET', '/reports/distribution', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  ReportsController::distribution(pdo($config), $auth);
+});
+$router->add('GET', '/reports/weekly-borrows', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  ReportsController::weeklyBorrows(pdo($config), $auth);
+});
+$router->add('GET', '/reports/my-weekly-borrows', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['student']);
+  ReportsController::myWeeklyBorrows(pdo($config), $auth);
+});
+$router->add('GET', '/reports/student-stats', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  ReportsController::studentStats(pdo($config));
 });
 
 /**
  * Users (Admin only)
  */
-$router->add('GET', '/users', function () use ($pdo, $config) {
+$router->add('GET', '/users', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin']);
-  UsersController::list($pdo, $auth);
+  UsersController::list(pdo($config), $auth);
 });
-$router->add('GET', '/users/pending', function () use ($pdo, $config) {
+$router->add('GET', '/users/pending', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin']);
-  UsersController::listPending($pdo, $auth);
+  UsersController::listPending(pdo($config), $auth);
 });
-$router->add('POST', '/users', function () use ($pdo, $config) {
+$router->add('POST', '/users', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin']);
-  UsersController::create($pdo, $auth);
+  UsersController::create(pdo($config), $auth);
 });
 
 //
@@ -229,7 +270,7 @@ if ($method === 'GET') {
   $id = Path::matchId($path, '/books/');
   if ($id !== null) {
     AuthMiddleware::requireAuth($config);
-    BooksController::get($pdo, $id);
+    BooksController::get(pdo($config), $id);
     exit;
   }
 }
@@ -239,7 +280,7 @@ if (in_array($method, ['PUT','PATCH'], true)) {
   if ($id !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin','librarian']);
-    BooksController::update($pdo, $id);
+    BooksController::update(pdo($config), $id);
     exit;
   }
 
@@ -247,7 +288,7 @@ if (in_array($method, ['PUT','PATCH'], true)) {
   if ($cid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    CategoriesController::update($pdo, $cid);
+    CategoriesController::update(pdo($config), $cid);
     exit;
   }
 
@@ -255,7 +296,7 @@ if (in_array($method, ['PUT','PATCH'], true)) {
   if ($id2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    UsersController::update($pdo, $auth, $id2);
+    UsersController::update(pdo($config), $auth, $id2);
     exit;
   }
 }
@@ -265,7 +306,7 @@ if ($method === 'DELETE') {
   if ($id !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    UsersController::delete($pdo, $auth, $id);
+    UsersController::delete(pdo($config), $auth, $id);
     exit;
   }
 
@@ -273,18 +314,55 @@ if ($method === 'DELETE') {
   if ($cid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    CategoriesController::delete($pdo, $cid);
+    CategoriesController::delete(pdo($config), $cid);
     exit;
   }
 }
 
-// Return route match
+// Borrow actions: approve/decline/return (LIBRARIAN ONLY)
 if ($method === 'POST') {
+  // add stock: POST /books/{id}/stock (LIBRARIAN/ADMIN)
+  $sid = Path::matchSuffixId($path, '/books/', '/stock');
+  if ($sid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+    BooksController::addStock(pdo($config), $auth, $sid);
+    exit;
+  }
+
+  // return: POST /borrow/{id}/return
   $rid = Path::matchSuffixId($path, '/borrow/', '/return');
   if ($rid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
-    AuthMiddleware::requireRole($auth, ['admin','librarian']);
-    BorrowController::returnBook($pdo, $auth, $rid);
+    AuthMiddleware::requireRole($auth, ['librarian']);
+    BorrowController::returnBook(pdo($config), $auth, $rid);
+    exit;
+  }
+
+  // cancel: POST /borrow/{id}/cancel (STUDENT ONLY)
+  $cid = Path::matchSuffixId($path, '/borrow/', '/cancel');
+  if ($cid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['student']);
+    BorrowController::cancel(pdo($config), $auth, $cid);
+    exit;
+  }
+
+  // approve: POST /borrow/{id}/approve
+  $bid = Path::matchSuffixId($path, '/borrow/', '/approve');
+  if ($bid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['librarian']);
+    BorrowController::approve(pdo($config), $config, $auth, $bid);
+    exit;
+  }
+
+  // decline: POST /borrow/{id}/decline
+  $bid2 = Path::matchSuffixId($path, '/borrow/', '/decline');
+  if ($bid2 !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['librarian']);
+    BorrowController::decline(pdo($config), $auth, $bid2);
     exit;
   }
 
@@ -293,16 +371,16 @@ if ($method === 'POST') {
   if ($uid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    UsersController::approve($pdo, $auth, $uid);
+    UsersController::approve(pdo($config), $auth, $uid);
     exit;
   }
 
-  // NEW: decline: POST /users/{id}/decline
+  // decline: POST /users/{id}/decline
   $uid2 = Path::matchSuffixId($path, '/users/', '/decline');
   if ($uid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
-    UsersController::decline($pdo, $auth, $uid2);
+    UsersController::decline(pdo($config), $auth, $uid2);
     exit;
   }
 }

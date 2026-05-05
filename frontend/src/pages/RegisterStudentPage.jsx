@@ -279,15 +279,23 @@ export default function RegisterStudentPage() {
                       id="student_number"
                       className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
                       value={form.student_number}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const raw = sanitizeNoForbidden(e.target.value);
+
+                        // digits only, max 9 digits
+                        const digitsOnly = raw.replace(/\D/g, "").slice(0, 9);
+
                         setForm({
                           ...form,
-                          student_number: sanitizeStudentNumber(sanitizeNoForbidden(e.target.value))
-                        })
-                      }
+                          student_number: sanitizeStudentNumber(digitsOnly)
+                        });
+                      }}
                       required
-                      placeholder="e.g. 202600123"
+                      placeholder="9-digit student number (e.g. 202600123)"
                       inputMode="numeric"
+                      maxLength={9}
+                      pattern="\d{9}"
+                      title="Student number must be exactly 9 digits."
                     />
                   </div>
                 </div>

@@ -13,3 +13,8 @@ export async function apiCommitBooksImport(rows) {
   const res = await http.post("/import/books/commit", { rows });
   return res.data;
 }
+
+export async function apiCreateBookManual(payload) {
+  const res = await http.post("/books", payload);
+  return res.data;
+}

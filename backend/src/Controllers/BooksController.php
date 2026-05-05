@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 final class BooksController {
+
   public static function list(PDO $pdo): void {
     $page = Query::int('page', 1, 1);
     $limit = Query::int('limit', 10, 1, 100);
@@ -72,6 +73,88 @@ final class BooksController {
     Http::ok(['book' => $book]);
   }
 
+  /**
+   * ✅ Create new book (Admin/Librarian only)
+   * POST /books
+   * If ISBN already exists -> 409 (do NOT override stock)
+   */
+  public static function create(PDO $pdo, array $auth): void {
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+
+    $b = Http::readJsonBody();
+
+    $title = trim((string)($b['title'] ?? ''));
+    $author = trim((string)($b['author'] ?? ''));
+    $isbn = trim((string)($b['isbn'] ?? ''));
+
+    $categoryId = (array_key_exists('category_id', $b) && $b['category_id'] !== '' && $b['category_id'] !== null)
+      ? (int)$b['category_id']
+      : null;
+
+    $year = (array_key_exists('year', $b) && $b['year'] !== '' && $b['year'] !== null)
+      ? (int)$b['year']
+      : null;
+
+    $description = (string)($b['description'] ?? '');
+    $copiesTotal = (int)($b['copies_total'] ?? 1);
+    $shelf = trim((string)($b['shelf_location'] ?? ''));
+
+    if ($title === '') Http::error('Title is required', 422);
+    if ($copiesTotal < 0) Http::error('Copies must be 0 or more', 422);
+
+    // ✅ prevent override: if ISBN exists, block create
+    if ($isbn !== '') {
+      $chk = $pdo->prepare("SELECT id, title, copies_total, copies_available FROM books WHERE isbn = ? LIMIT 1");
+      $chk->execute([$isbn]);
+      $existing = $chk->fetch();
+
+      if ($existing) {
+        Http::error('Book already exists in the book list. Use Add Stock instead.', 409, [
+          'existing_book_id' => (int)$existing['id'],
+          'existing_title' => (string)($existing['title'] ?? ''),
+          'copies_total' => (int)($existing['copies_total'] ?? 0),
+          'copies_available' => (int)($existing['copies_available'] ?? 0),
+        ]);
+      }
+    }
+
+    try {
+      $ins = $pdo->prepare("
+        INSERT INTO books (title, author, isbn, category_id, year, description, copies_total, copies_available, shelf_location)
+        VALUES (?,?,?,?,?,?,?,?,?)
+      ");
+      $ins->execute([
+        $title,
+        $author !== '' ? $author : null,
+        $isbn !== '' ? $isbn : null,
+        $categoryId,
+        $year,
+        $description !== '' ? $description : null,
+        $copiesTotal,
+        $copiesTotal,
+        $shelf !== '' ? $shelf : null,
+      ]);
+
+      $newId = (int)$pdo->lastInsertId();
+
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => (int)($auth['user_id'] ?? 0) ?: null,
+        'action' => 'book.create',
+        'entity_type' => 'book',
+        'entity_id' => $newId,
+        'details' => [
+          'title' => $title,
+          'isbn' => $isbn,
+          'copies_total' => $copiesTotal,
+        ],
+      ]);
+
+      Http::ok(['message' => 'Book created', 'book_id' => $newId], 201);
+    } catch (PDOException $e) {
+      Http::error('Failed to create book (ISBN may already exist)', 409);
+    }
+  }
+
   public static function update(PDO $pdo, int $id): void {
     $b = Http::readJsonBody();
 
@@ -87,7 +170,7 @@ final class BooksController {
 
     if (!$fields) Http::error('No fields to update', 422);
 
-    // If copies_total is being updated, enforce Option A rule:
+    // If copies_total is being updated, enforce:
     // copies_available = copies_total - currently_borrowed (borrowed+overdue)
     $updatingCopiesTotal = array_key_exists('copies_total', $b);
     if ($updatingCopiesTotal) {
@@ -119,5 +202,44 @@ final class BooksController {
     } catch (PDOException $e) {
       Http::error('Failed to update book (ISBN may already exist)', 409);
     }
+  }
+
+  /**
+   * ✅ Add stock (Librarian/Admin)
+   * POST /books/{id}/stock  body: { qty: number }
+   * Increases copies_total AND copies_available by qty.
+   */
+  public static function addStock(PDO $pdo, array $auth, int $id): void {
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+
+    $b = Http::readJsonBody();
+    $qty = (int)($b['qty'] ?? 0);
+    if ($qty <= 0) Http::error('qty must be greater than 0', 422);
+
+    $stmt = $pdo->prepare("SELECT id, title FROM books WHERE id = ? LIMIT 1");
+    $stmt->execute([$id]);
+    $book = $stmt->fetch();
+    if (!$book) Http::error('Book not found', 404);
+
+    $upd = $pdo->prepare("
+      UPDATE books
+      SET copies_total = copies_total + ?,
+          copies_available = copies_available + ?
+      WHERE id = ?
+    ");
+    $upd->execute([$qty, $qty, $id]);
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => (int)($auth['user_id'] ?? 0),
+      'action' => 'book.add_stock',
+      'entity_type' => 'book',
+      'entity_id' => $id,
+      'details' => [
+        'qty' => $qty,
+        'title' => (string)($book['title'] ?? ''),
+      ],
+    ]);
+
+    Http::ok(['message' => 'Stock added', 'book_id' => $id, 'qty' => $qty]);
   }
 }

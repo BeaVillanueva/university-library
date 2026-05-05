@@ -8,7 +8,7 @@ function getBaseUrl() {
 
   return (
     import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost/university-library/backend/public"
+    "http://localhost/university-library/backend/public/index.php"
   );
 }
 
@@ -20,16 +20,22 @@ export function setApiBaseUrl(next) {
   localStorage.setItem(LS_API_BASE, next);
 }
 
-// axios instance
 export const http = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 20000
+  timeout: 20000,
 });
 
 // request interceptor: attach token
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem("ulms_token");
-  console.log("[HTTP] baseURL=", http.defaults.baseURL, "token?", !!token, "url=", config.url);
+  console.log(
+    "[HTTP] baseURL=",
+    http.defaults.baseURL,
+    "token?",
+    !!token,
+    "url=",
+    config.url
+  );
 
   if (token) {
     config.headers = config.headers || {};
@@ -37,3 +43,23 @@ http.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// response interceptor: auto-logout on expired/invalid token
+http.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+
+    if (status === 401) {
+      localStorage.removeItem("ulms_token");
+      localStorage.removeItem("ulms_user");
+
+      // avoid redirect loop
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);

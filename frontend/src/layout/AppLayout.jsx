@@ -2,15 +2,15 @@ import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
+import { http } from "../api/http";
 import { apiListPendingStudents } from "../api/users";
+import { apiListAllBorrows } from "../api/borrow";
 import {
   FiHome,
   FiUsers,
-  FiGrid,
   FiBarChart2,
   FiUpload,
   FiRepeat,
-  FiAlertTriangle,
   FiBookOpen,
   FiClock,
   FiSettings,
@@ -22,15 +22,12 @@ import {
 } from "react-icons/fi";
 
 const LS_SIDEBAR_COLLAPSED = "ulms_sidebar_collapsed";
-
-// gold/orange icons like reference
 const ICON_ACCENT = "text-[#d6a436]";
 
 function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false }) {
   const base =
     "group relative flex items-center text-sm font-semibold transition " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
-    "h-11";
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-11";
 
   const normal = "rounded-2xl text-white/85 hover:bg-white/10";
   const active =
@@ -66,8 +63,7 @@ function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false })
 function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
   const base =
     "group relative flex items-center justify-between gap-3 text-sm transition " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
-    "h-10";
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-10";
 
   const normal = "rounded-2xl text-white/75 hover:bg-white/10";
   const active =
@@ -81,9 +77,11 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
       end={end}
       onClick={onNavigate}
       className={({ isActive }) =>
-        [base, collapsed ? "px-0 justify-center" : "px-4 pl-12", isActive ? active : normal].join(
-          " "
-        )
+        [
+          base,
+          collapsed ? "px-0 justify-center" : "px-4 pl-12",
+          isActive ? active : normal
+        ].join(" ")
       }
       aria-label={label}
       title={collapsed ? label : undefined}
@@ -92,7 +90,7 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
 
       {showBadge ? (
         <span
-          className="min-w-[28px] rounded-full bg-white/20 px-2 py-[2px] text-center text-xs font-semibold text-white"
+          className="min-w-[28px] rounded-full bg-rose-600 px-2 py-[2px] text-center text-xs font-bold text-white shadow-sm ring-1 ring-white/15"
           aria-label={`${label} count ${badge}`}
         >
           {badge}
@@ -114,8 +112,25 @@ export default function AppLayout() {
     return raw === "1";
   });
 
+  const role = user?.role;
+  const isAdmin = role === "admin";
+  const isLibrarian = role === "librarian";
+  const isStudent = role === "student";
+
   const [usersOpen, setUsersOpen] = useState(() => loc.pathname.startsWith("/admin/users"));
   const [pendingCount, setPendingCount] = useState(0);
+
+  // ✅ pending borrow requests badge (librarian only)
+  const [pendingBorrowsCount, setPendingBorrowsCount] = useState(0);
+
+  // Borrowing submenu (Librarian ONLY)
+  const [borrowingOpen, setBorrowingOpen] = useState(() =>
+    loc.pathname.startsWith("/librarian/borrowing")
+  );
+
+  useEffect(() => {
+    if (loc.pathname.startsWith("/librarian/borrowing")) setBorrowingOpen(true);
+  }, [loc.pathname]);
 
   useEffect(() => {
     localStorage.setItem(LS_SIDEBAR_COLLAPSED, collapsed ? "1" : "0");
@@ -125,22 +140,27 @@ export default function AppLayout() {
     if (loc.pathname.startsWith("/admin/users")) setUsersOpen(true);
   }, [loc.pathname]);
 
-  function handleLogout() {
-    logout();
-    nav("/login", { replace: true });
+  async function handleLogout() {
+    try {
+      await http.post("/auth/logout", {});
+    } catch {
+      // ignore
+    } finally {
+      logout();
+      nav("/login", { replace: true });
+    }
   }
 
   function onNavigate() {
     setOpen(false);
   }
 
-  const role = user?.role;
-
+  // ✅ Admin: pending students badge
   useEffect(() => {
     let cancelled = false;
 
     async function loadPendingCount() {
-      if (role !== "admin") return;
+      if (!isAdmin) return;
       try {
         const res = await apiListPendingStudents();
         const count = Array.isArray(res?.items) ? res.items.length : 0;
@@ -157,7 +177,39 @@ export default function AppLayout() {
       cancelled = true;
       clearInterval(t);
     };
-  }, [role]);
+  }, [isAdmin]);
+
+  // ✅ Librarian: pending borrow requests badge
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPendingBorrowsCount() {
+      if (!isLibrarian) return;
+
+      try {
+        const res = await apiListAllBorrows({ status: "pending", page: 1, limit: 1 });
+
+        const total =
+          typeof res?.total === "number"
+            ? res.total
+            : Array.isArray(res?.items)
+              ? res.items.length
+              : 0;
+
+        if (!cancelled) setPendingBorrowsCount(total);
+      } catch {
+        if (!cancelled) setPendingBorrowsCount(0);
+      }
+    }
+
+    loadPendingBorrowsCount();
+    const t = setInterval(loadPendingBorrowsCount, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [isLibrarian]);
 
   const appBg = a11yMode ? "bg-slate-950" : "bg-[#e9eff0]";
 
@@ -207,7 +259,7 @@ export default function AppLayout() {
             onClick={onSidebarBackgroundClick}
             role="presentation"
           >
-            {/* Profile: expanded shows name/email, collapsed shows circular icon */}
+            {/* Profile */}
             {collapsed ? (
               <div className="mt-1 flex items-center justify-center">
                 <button
@@ -238,84 +290,209 @@ export default function AppLayout() {
 
             {/* Navigation */}
             <nav className="mt-3 space-y-1 flex-1 overflow-hidden px-1">
-              <LinkItem to="/" end label="Dashboard" icon={FiHome} onNavigate={onNavigate} collapsed={collapsed} />
+              <LinkItem
+                to="/"
+                end
+                label="Dashboard"
+                icon={FiHome}
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
 
-              {role === "admin" ? (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setUsersOpen((v) => !v)}
-                    className={[
-                      "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
-                      "rounded-2xl h-11",
-                      loc.pathname.startsWith("/admin/users")
-                        ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
-                        : "text-white/85 hover:bg-white/10"
-                    ].join(" ")}
-                    aria-label="Users submenu"
-                    aria-expanded={usersOpen}
-                    title={collapsed ? "Users" : undefined}
-                  >
-                    <span className={["flex items-center", collapsed ? "justify-center w-full" : "gap-3"].join(" ")}>
-                      <FiUsers size={18} className={ICON_ACCENT} aria-hidden="true" />
-                      <span className={collapsed ? "hidden" : "truncate"}>Users</span>
-                    </span>
-
-                    {collapsed ? null : usersOpen ? (
-                      <FiChevronUp className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <FiChevronDown className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </button>
-
-                  {usersOpen && !collapsed ? (
-                    <div className="mt-1 space-y-1">
-                      <SubLinkItem
-                        to="/admin/users/pending"
-                        label="Pending Approval"
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        end
-                        badge={pendingCount}
-                      />
-                      <SubLinkItem to="/admin/users" label="All Users" onNavigate={onNavigate} collapsed={collapsed} end />
-                      <SubLinkItem
-                        to="/admin/users/create"
-                        label="Create User"
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        end
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {role === "admin" ? (
+              {/* ADMIN: Users + Reports only */}
+              {isAdmin ? (
                 <>
-                  <LinkItem to="/admin/categories" label="Categories" icon={FiGrid} onNavigate={onNavigate} collapsed={collapsed} />
-                  <LinkItem to="/admin/reports" label="Reports" icon={FiBarChart2} onNavigate={onNavigate} collapsed={collapsed} />
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setUsersOpen((v) => !v)}
+                      className={[
+                        "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
+                        "rounded-2xl h-11",
+                        loc.pathname.startsWith("/admin/users")
+                          ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
+                          : "text-white/85 hover:bg-white/10"
+                      ].join(" ")}
+                      aria-label="Users submenu"
+                      aria-expanded={usersOpen}
+                      title={collapsed ? "Users" : undefined}
+                    >
+                      <span
+                        className={[
+                          "flex items-center",
+                          collapsed ? "justify-center w-full" : "gap-3"
+                        ].join(" ")}
+                      >
+                        <FiUsers size={18} className={ICON_ACCENT} aria-hidden="true" />
+                        <span className={collapsed ? "hidden" : "truncate"}>Users</span>
+                      </span>
+
+                      {collapsed ? null : usersOpen ? (
+                        <FiChevronUp className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <FiChevronDown className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+
+                    {usersOpen && !collapsed ? (
+                      <div className="mt-1 space-y-1">
+                        <SubLinkItem
+                          to="/admin/users/pending"
+                          label="Pending Approval"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                          badge={pendingCount}
+                        />
+                        <SubLinkItem
+                          to="/admin/users"
+                          label="All Users"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                        />
+                        <SubLinkItem
+                          to="/admin/users/create"
+                          label="Create User"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <LinkItem
+                    to="/admin/reports"
+                    label="Reports"
+                    icon={FiBarChart2}
+                    onNavigate={onNavigate}
+                    collapsed={collapsed}
+                  />
                 </>
               ) : null}
 
-              {role === "librarian" || role === "admin" ? (
+              {/* LIBRARIAN: Import + Borrowing submenu */}
+              {isLibrarian ? (
                 <>
-                  <LinkItem to="/librarian/import" label="Import Books (CSV)" icon={FiUpload} onNavigate={onNavigate} collapsed={collapsed} />
-                  <LinkItem to="/librarian/borrows" label="Borrow / Return" icon={FiRepeat} onNavigate={onNavigate} collapsed={collapsed} />
-                  <LinkItem to="/librarian/overdue" label="Overdue" icon={FiAlertTriangle} onNavigate={onNavigate} collapsed={collapsed} />
+                  <LinkItem
+                    to="/librarian/import"
+                    label="Import Books (CSV)"
+                    icon={FiUpload}
+                    onNavigate={onNavigate}
+                    collapsed={collapsed}
+                  />
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setBorrowingOpen((v) => !v)}
+                      className={[
+                        "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
+                        "rounded-2xl h-11",
+                        loc.pathname.startsWith("/librarian/borrowing")
+                          ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
+                          : "text-white/85 hover:bg-white/10"
+                      ].join(" ")}
+                      aria-label="Borrowing submenu"
+                      aria-expanded={borrowingOpen}
+                      title={collapsed ? "Borrowing" : undefined}
+                    >
+                      <span
+                        className={[
+                          "flex items-center",
+                          collapsed ? "justify-center w-full" : "gap-3"
+                        ].join(" ")}
+                      >
+                        <FiRepeat size={18} className={ICON_ACCENT} aria-hidden="true" />
+                        <span className={collapsed ? "hidden" : "truncate"}>Borrowing</span>
+                      </span>
+
+                      {collapsed ? null : borrowingOpen ? (
+                        <FiChevronUp className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <FiChevronDown className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+
+                    {borrowingOpen && !collapsed ? (
+                      <div className="mt-1 space-y-1">
+                        <SubLinkItem
+                          to="/librarian/borrowing/pending"
+                          label="Pending Approvals"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                          badge={pendingBorrowsCount}
+                        />
+                        <SubLinkItem
+                          to="/librarian/borrowing/borrowed"
+                          label="Borrowed / Return"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                        />
+                        <SubLinkItem
+                          to="/librarian/borrowing/overdue"
+                          label="Overdue"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                        />
+                        <SubLinkItem
+                          to="/librarian/borrowing/history"
+                          label="History"
+                          onNavigate={onNavigate}
+                          collapsed={collapsed}
+                          end
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 </>
               ) : null}
 
-              <LinkItem to="/books" label="Books" icon={FiBookOpen} onNavigate={onNavigate} collapsed={collapsed} />
-              <LinkItem to="/my/borrows" label="My History" icon={FiClock} onNavigate={onNavigate} collapsed={collapsed} />
-              <LinkItem to="/settings" label="Settings" icon={FiSettings} onNavigate={onNavigate} collapsed={collapsed} />
+              {/* Books: everyone can view */}
+              <LinkItem
+                to="/books"
+                label="Books"
+                icon={FiBookOpen}
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
 
-              {role === "admin" || role === "librarian" ? (
-                <LinkItem to="/activity-logs" label="Activity Logs" icon={FiFileText} onNavigate={onNavigate} collapsed={collapsed} />
+              {/* My History: STUDENT only */}
+              {isStudent ? (
+                <LinkItem
+                  to="/my/borrows"
+                  label="My History"
+                  icon={FiClock}
+                  onNavigate={onNavigate}
+                  collapsed={collapsed}
+                />
+              ) : null}
+
+              <LinkItem
+                to="/settings"
+                label="Settings"
+                icon={FiSettings}
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
+
+              {/* Activity logs: Admin + Librarian only */}
+              {isAdmin || isLibrarian ? (
+                <LinkItem
+                  to="/activity-logs"
+                  label="Activity Logs"
+                  icon={FiFileText}
+                  onNavigate={onNavigate}
+                  collapsed={collapsed}
+                />
               ) : null}
             </nav>
 
-            {/* Logout glow */}
+            {/* Logout */}
             <div className="pt-3 shrink-0">
               <button
                 type="button"

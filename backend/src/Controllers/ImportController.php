@@ -15,9 +15,7 @@ final class ImportController {
         'action' => 'import.books_preview_failed',
         'entity_type' => 'import',
         'entity_id' => null,
-        'details' => [
-          'reason' => 'file_required',
-        ],
+        'details' => ['reason' => 'file_required'],
       ]);
       Http::error('CSV file is required (multipart field: file)', 422);
     }
@@ -30,9 +28,7 @@ final class ImportController {
         'action' => 'import.books_preview_failed',
         'entity_type' => 'import',
         'entity_id' => null,
-        'details' => [
-          'reason' => 'failed_to_open_file',
-        ],
+        'details' => ['reason' => 'failed_to_open_file'],
       ]);
       Http::error('Failed to read uploaded file', 400);
     }
@@ -45,9 +41,7 @@ final class ImportController {
         'action' => 'import.books_preview_failed',
         'entity_type' => 'import',
         'entity_id' => null,
-        'details' => [
-          'reason' => 'missing_header',
-        ],
+        'details' => ['reason' => 'missing_header'],
       ]);
       Http::error('CSV header row missing', 422);
     }
@@ -72,7 +66,10 @@ final class ImportController {
     }
 
     $index = array_flip($header);
-    $rows = [];
+
+    // ✅ First pass: read rows + collect ISBNs
+    $rawRows = [];
+    $isbns = []; // isbn => true
     $rowNum = 1;
 
     while (($data = fgetcsv($fh)) !== false) {
@@ -85,27 +82,64 @@ final class ImportController {
         $row[$col] = trim($row[$col]);
       }
 
-      // Basic validation; deeper validation happens on commit.
-      $errors = [];
-      if ($row['title'] === '') $errors[] = 'title required';
-      if ($row['author'] === '') $errors[] = 'author required';
-      if ($row['isbn'] === '') $errors[] = 'isbn required';
-      if ($row['copies_total'] === '' || !preg_match('/^\d+$/', $row['copies_total'])) $errors[] = 'copies_total must be integer >= 0';
-
-      // Normalize types for frontend preview
+      // Normalize types for preview
       $row['year'] = $row['year'] !== '' ? (int)$row['year'] : null;
       $row['copies_total'] = $row['copies_total'] !== '' ? (int)$row['copies_total'] : 0;
 
-      $rows[] = [
+      $rawRows[] = [
         'row_number' => $rowNum,
         'data' => $row,
-        'errors' => $errors,
       ];
 
-      if (count($rows) >= 5000) break; // safety cap
+      $isbn = trim((string)($row['isbn'] ?? ''));
+      if ($isbn !== '') $isbns[$isbn] = true;
+
+      if (count($rawRows) >= 5000) break; // safety cap
     }
 
     fclose($fh);
+
+    // ✅ Query existing ISBNs in one go
+    $existingIsbnMap = []; // isbn => true
+    if (count($isbns) > 0) {
+      $isbnList = array_keys($isbns);
+      $placeholders = implode(',', array_fill(0, count($isbnList), '?'));
+      $stmtExisting = $pdo->prepare("SELECT isbn FROM books WHERE isbn IN ($placeholders)");
+      $stmtExisting->execute($isbnList);
+
+      foreach ($stmtExisting->fetchAll() as $r) {
+        $existingIsbnMap[(string)$r['isbn']] = true;
+      }
+    }
+
+    // ✅ Build preview rows with errors (includes existing ISBN check)
+    $rows = [];
+    foreach ($rawRows as $wrap) {
+      $row = $wrap['data'];
+      $rn = (int)$wrap['row_number'];
+
+      $errors = [];
+
+      if (($row['title'] ?? '') === '') $errors[] = 'title required';
+      if (($row['author'] ?? '') === '') $errors[] = 'author required';
+
+      $isbn = trim((string)($row['isbn'] ?? ''));
+      if ($isbn === '') $errors[] = 'isbn required';
+
+      $copies = (int)($row['copies_total'] ?? 0);
+      if ($copies < 0) $errors[] = 'copies_total must be integer >= 0';
+
+      // ✅ Block saving if ISBN already exists in DB
+      if ($isbn !== '' && isset($existingIsbnMap[$isbn])) {
+        $errors[] = 'isbn already exists in book list. Use "Add Stock" instead.';
+      }
+
+      $rows[] = [
+        'row_number' => $rn,
+        'data' => $row,
+        'errors' => $errors,
+      ];
+    }
 
     // Log preview success (summary only)
     $invalidCount = 0;
@@ -128,7 +162,7 @@ final class ImportController {
     Http::ok([
       'required_columns' => self::$requiredColumns,
       'preview' => $rows,
-      'note' => 'Preview does not write to database. Submit valid rows to /import/books/commit.',
+      'note' => 'Preview does not write to database. Existing ISBN rows are blocked from saving.',
     ]);
   }
 
@@ -144,15 +178,13 @@ final class ImportController {
         'action' => 'import.books_commit_failed',
         'entity_type' => 'import',
         'entity_id' => null,
-        'details' => [
-          'reason' => 'rows_required',
-        ],
+        'details' => ['reason' => 'rows_required'],
       ]);
       Http::error('rows array is required', 422);
     }
 
     $inserted = 0;
-    $updated = 0;
+    $updated = 0; // no updates (no override)
     $skipped = 0;
     $rowResults = [];
 
@@ -207,61 +239,43 @@ final class ImportController {
           }
         }
 
-        // Does ISBN exist?
-        $stmtBook = $pdo->prepare("SELECT id FROM books WHERE isbn = ? LIMIT 1");
+        // ✅ Safety check in commit too: if ISBN exists, do NOT override
+        $stmtBook = $pdo->prepare("SELECT id, title FROM books WHERE isbn = ? LIMIT 1");
         $stmtBook->execute([$isbn]);
         $existingBook = $stmtBook->fetch();
-
-        if (!$existingBook) {
-          // Insert: copies_available = copies_total
-          $ins = $pdo->prepare("
-            INSERT INTO books (title, author, isbn, category_id, year, description, copies_total, copies_available, shelf_location)
-            VALUES (?,?,?,?,?,?,?,?,?)
-          ");
-          $ins->execute([
-            $title, $author, $isbn,
-            $categoryId,
-            ($year === null || $year === '') ? null : (int)$year,
-            $description,
-            $copiesTotal,
-            $copiesTotal,
-            $shelf
-          ]);
-          $inserted++;
-          $rowResults[] = ['row_number' => $rowNumber, 'action' => 'inserted', 'book_id' => (int)$pdo->lastInsertId()];
-        } else {
-          $bookId = (int)$existingBook['id'];
-
-          // Option A rule on update: copies_available = copies_total - currently_borrowed
-          $stmtBorrowed = $pdo->prepare("
-            SELECT COUNT(*) AS c
-            FROM borrow_records
-            WHERE book_id = ?
-              AND return_date IS NULL
-              AND status IN ('borrowed','overdue')
-          ");
-          $stmtBorrowed->execute([$bookId]);
-          $borrowedCount = (int)($stmtBorrowed->fetch()['c'] ?? 0);
-          $newAvailable = max(0, $copiesTotal - $borrowedCount);
-
-          $upd = $pdo->prepare("
-            UPDATE books
-            SET title = ?, author = ?, category_id = ?, year = ?, description = ?, copies_total = ?, copies_available = ?, shelf_location = ?
-            WHERE id = ?
-          ");
-          $upd->execute([
-            $title, $author,
-            $categoryId,
-            ($year === null || $year === '') ? null : (int)$year,
-            $description,
-            $copiesTotal,
-            $newAvailable,
-            $shelf,
-            $bookId
-          ]);
-          $updated++;
-          $rowResults[] = ['row_number' => $rowNumber, 'action' => 'updated', 'book_id' => $bookId];
+        if ($existingBook) {
+          $skipped++;
+          $rowResults[] = [
+            'row_number' => $rowNumber,
+            'action' => 'skipped',
+            'errors' => ['isbn already exists in book list. Use "Add Stock" instead.'],
+            'existing_book_id' => (int)$existingBook['id'],
+            'existing_title' => (string)($existingBook['title'] ?? ''),
+          ];
+          continue;
         }
+
+        // Insert: copies_available = copies_total
+        $ins = $pdo->prepare("
+          INSERT INTO books (title, author, isbn, category_id, year, description, copies_total, copies_available, shelf_location)
+          VALUES (?,?,?,?,?,?,?,?,?)
+        ");
+        $ins->execute([
+          $title, $author, $isbn,
+          $categoryId,
+          ($year === null || $year === '') ? null : (int)$year,
+          $description,
+          $copiesTotal,
+          $copiesTotal,
+          $shelf
+        ]);
+
+        $inserted++;
+        $rowResults[] = [
+          'row_number' => $rowNumber,
+          'action' => 'inserted',
+          'book_id' => (int)$pdo->lastInsertId()
+        ];
       }
 
       $pdo->commit();

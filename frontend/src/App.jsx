@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+
+import { startIdleLogout } from "./utils/idleLogout.js";
 
 import LoginPage from "./pages/LoginPage.jsx";
 import RegisterStudentPage from "./pages/RegisterStudentPage.jsx";
@@ -28,7 +30,17 @@ import DevInfoPage from "./pages/DevInfoPage.jsx";
 
 import ActivityLogsPage from "./pages/ActivityLogsPage.jsx";
 
+import BorrowPendingPage from "./pages/librarian/BorrowPendingPage.jsx";
+import BorrowBorrowedPage from "./pages/librarian/BorrowBorrowedPage.jsx";
+import BorrowOverdueListPage from "./pages/librarian/BorrowOverdueListPage.jsx";
+import BorrowAllHistoryPage from "./pages/librarian/BorrowAllHistoryPage.jsx";
+
 export default function App() {
+  useEffect(() => {
+    const stop = startIdleLogout();
+    return stop;
+  }, []);
+
   return (
     <Routes>
       {/* Public routes */}
@@ -60,27 +72,59 @@ export default function App() {
 
         <Route path="my/borrows" element={<MyBorrowsPage />} />
 
+        {/* Librarian-only */}
         <Route
           path="librarian/import"
           element={
-            <ProtectedRoute roles={["admin", "librarian"]}>
+            <ProtectedRoute roles={["librarian"]}>
               <ImportBooksPage />
             </ProtectedRoute>
           }
         />
+
+        {/* Backward-compatible redirects */}
         <Route
           path="librarian/borrows"
-          element={
-            <ProtectedRoute roles={["admin", "librarian"]}>
-              <BorrowReturnPage />
-            </ProtectedRoute>
-          }
+          element={<Navigate to="/librarian/borrowing/borrowed" replace />}
         />
         <Route
           path="librarian/overdue"
+          element={<Navigate to="/librarian/borrowing/overdue" replace />}
+        />
+
+        {/* Borrowing submenu pages (Librarian-only) */}
+        <Route
+          path="librarian/borrowing/pending"
           element={
-            <ProtectedRoute roles={["admin", "librarian"]}>
-              <OverduePage />
+            <ProtectedRoute roles={["librarian"]}>
+              <BorrowPendingPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="librarian/borrowing/borrowed"
+          element={
+            <ProtectedRoute roles={["librarian"]}>
+              <BorrowBorrowedPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="librarian/borrowing/overdue"
+          element={
+            <ProtectedRoute roles={["librarian"]}>
+              <BorrowOverdueListPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="librarian/borrowing/history"
+          element={
+            <ProtectedRoute roles={["librarian"]}>
+              <BorrowAllHistoryPage />
             </ProtectedRoute>
           }
         />
@@ -111,6 +155,8 @@ export default function App() {
           }
         />
 
+        {/* Optional: if admin should NOT manage categories, remove this route.
+            If admin still manages categories, keep it as-is. */}
         <Route
           path="admin/categories"
           element={
@@ -119,6 +165,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="admin/reports"
           element={
@@ -130,16 +177,17 @@ export default function App() {
 
         <Route path="settings" element={<SettingsPage />} />
 
+        {/* Dev page: librarian-only (admin removed) */}
         <Route
           path="dev"
           element={
-            <ProtectedRoute roles={["admin", "librarian"]}>
+            <ProtectedRoute roles={["librarian"]}>
               <DevInfoPage />
             </ProtectedRoute>
           }
         />
 
-        {/* NOTE: since this is nested under path="/", do NOT start with "/" */}
+        {/* Activity logs: admin + librarian (keep both) */}
         <Route
           path="activity-logs"
           element={

@@ -97,10 +97,18 @@ export function AuthProvider({ children }) {
       if (nextUser) safeSetItem(LS_USER, JSON.stringify(nextUser));
       else localStorage.removeItem(LS_USER);
 
-      return { ok: true };
+      return { ok: true, status: 200, data: res };
     } catch (e) {
-      const msg = e?.response?.data?.error || e?.message || "Login failed";
-      return { ok: false, error: msg };
+      const status = e?.response?.status ?? 0;
+      const data = e?.response?.data ?? null;
+      const msg = data?.error || e?.message || "Login failed";
+
+      // ✅ Ensure we don't keep a stale token/user if login fails
+      // (optional but safer)
+      // setToken("");
+      // setUser(null);
+
+      return { ok: false, status, error: msg, data };
     } finally {
       setLoading(false);
     }

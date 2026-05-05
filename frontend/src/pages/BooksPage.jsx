@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiListBooks } from "../api/books";
+import { apiListBooks, apiAddBookStock } from "../api/books";
 import { apiListCategories } from "../api/categories";
-import { apiBorrowBook } from "../api/borrow";
+import { apiBorrowBook, apiCancelBorrow, apiMyBorrowHistory } from "../api/borrow";
 import { useAuth } from "../state/AuthContext";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
@@ -10,6 +10,16 @@ import TextToSpeechButton from "../components/TextToSpeechButton";
 
 export default function BooksPage() {
   const { user } = useAuth();
+
+  const role = user?.role || "";
+  const isLibrarian = role === "librarian";
+  const isStudent = role === "student";
+
+  // ✅ Admin view-only, Librarian can edit, Student can borrow
+  const canEdit = isLibrarian;
+  const canBorrow = isStudent;
+
+  const MAX_ACTIVE = 3;
 
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
@@ -25,7 +35,9 @@ export default function BooksPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const canEdit = user?.role === "admin" || user?.role === "librarian";
+  // ✅ student queue
+  const [myBorrows, setMyBorrows] = useState([]);
+  const [myBorrowsLoading, setMyBorrowsLoading] = useState(false);
 
   const ttsText = useMemo(() => {
     return items
@@ -33,6 +45,39 @@ export default function BooksPage() {
       .map((b) => `${b.title} by ${b.author}. Available copies ${b.copies_available}.`)
       .join(" ");
   }, [items]);
+
+  const myActive = useMemo(() => {
+    return (myBorrows || []).filter((r) =>
+      ["pending", "borrowed", "overdue"].includes(String(r.status || "").toLowerCase())
+    );
+  }, [myBorrows]);
+
+  const queueFull = canBorrow && myActive.length >= MAX_ACTIVE;
+
+  async function refreshBooks() {
+    const res = await apiListBooks({
+      page,
+      limit,
+      q: q || undefined,
+      category_id: categoryId || undefined,
+      availability: availability || undefined
+    });
+    setItems(res.items || []);
+    setTotalPages(res.total_pages || 1);
+  }
+
+  async function loadMyBorrows() {
+    if (!canBorrow) return;
+    setMyBorrowsLoading(true);
+    try {
+      const res = await apiMyBorrowHistory({ page: 1, limit: 50 });
+      setMyBorrows(res?.items || []);
+    } catch {
+      setMyBorrows([]);
+    } finally {
+      setMyBorrowsLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +94,11 @@ export default function BooksPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    loadMyBorrows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canBorrow]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,21 +131,26 @@ export default function BooksPage() {
   }, [page, limit, q, categoryId, availability]);
 
   async function handleBorrow(bookId) {
+    if (!canBorrow) return;
+
+    if (queueFull) {
+      setError(`You can only have up to ${MAX_ACTIVE} active requests/borrows. Remove one first.`);
+      return;
+    }
+
     setNotice("");
     setError("");
     try {
       const res = await apiBorrowBook(bookId);
-      setNotice(`Borrowed successfully. Due date: ${res.due_date}`);
 
-      const refreshed = await apiListBooks({
-        page,
-        limit,
-        q: q || undefined,
-        category_id: categoryId || undefined,
-        availability: availability || undefined
-      });
-      setItems(refreshed.items || []);
-      setTotalPages(refreshed.total_pages || 1);
+      const msg = res?.message || "Request sent";
+      const due = res?.due_date ? ` Due date: ${res.due_date}` : "";
+      const status = res?.status ? ` (${String(res.status).toUpperCase()})` : "";
+
+      setNotice(`${msg}${status}.${due}`);
+
+      await refreshBooks();
+      await loadMyBorrows();
     } catch (e) {
       const data = e?.response?.data;
       const msg = data?.error || e?.message || "Borrow failed";
@@ -104,6 +159,42 @@ export default function BooksPage() {
       } else {
         setError(msg);
       }
+    }
+  }
+
+  async function handleCancelPending(recordId) {
+    if (!confirm("Cancel this pending borrow request?")) return;
+
+    setError("");
+    setNotice("");
+
+    try {
+      await apiCancelBorrow(recordId);
+      setNotice("Pending request cancelled.");
+      await loadMyBorrows();
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.message || "Cancel failed.");
+    }
+  }
+
+  async function handleAddStock(bookId) {
+    const raw = prompt("Add how many copies? (number)");
+    if (raw === null) return;
+
+    const qty = Number(raw);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError("Invalid quantity.");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    try {
+      await apiAddBookStock(bookId, Math.trunc(qty));
+      setNotice("Stock added successfully.");
+      await refreshBooks();
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.message || "Failed to add stock");
     }
   }
 
@@ -125,6 +216,74 @@ export default function BooksPage() {
         </div>
         <TextToSpeechButton text={ttsText} label="Read the list of books aloud" />
       </div>
+
+      {/* ✅ Student: My Borrow Queue box */}
+      {canBorrow ? (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">My Borrow Queue</div>
+              <div className="text-xs text-slate-500">
+                Active (pending/borrowed/overdue):{" "}
+                <span className="font-semibold">
+                  {myActive.length}/{MAX_ACTIVE}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={loadMyBorrows}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {myBorrowsLoading ? (
+            <div className="mt-3 text-sm text-slate-600">Loading…</div>
+          ) : myActive.length === 0 ? (
+            <div className="mt-3 text-sm text-slate-600">No active requests/borrows.</div>
+          ) : (
+            <div className="mt-3 grid gap-2">
+              {myActive.slice(0, MAX_ACTIVE).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-800">
+                      {r.title || "Book"}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      Status: <span className="font-semibold">{String(r.status || "—")}</span>
+                      {r.due_date ? ` • Due: ${r.due_date}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {String(r.status || "").toLowerCase() === "pending" ? (
+                      <button
+                        type="button"
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                        onClick={() => handleCancelPending(r.id)}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {queueFull ? (
+            <div className="mt-3 text-xs font-semibold text-rose-700">
+              You reached the maximum of {MAX_ACTIVE}. Cancel/return one to borrow another.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -222,19 +381,19 @@ export default function BooksPage() {
                 <th className="px-4 py-3">ISBN</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Avail</th>
-                <th className="px-4 py-3"></th>
+                {(canEdit || canBorrow) ? <th className="px-4 py-3"></th> : null}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={6}>
+                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={(canEdit || canBorrow) ? 6 : 5}>
                     Loading…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={6}>
+                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={(canEdit || canBorrow) ? 6 : 5}>
                     No books found.
                   </td>
                 </tr>
@@ -249,38 +408,53 @@ export default function BooksPage() {
                       <span
                         className={[
                           "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                          b.copies_available > 0
-                            ? "bg-green-50 text-green-700"
-                            : "bg-slate-100 text-slate-600"
+                          b.copies_available > 0 ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"
                         ].join(" ")}
                         aria-label={`Copies available ${b.copies_available}`}
                       >
                         {b.copies_available}/{b.copies_total}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 justify-end">
-                        {canEdit ? (
-                          <Link
-                            to={`/books/${b.id}/edit`}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
-                            aria-label={`Edit ${b.title}`}
-                          >
-                            Edit
-                          </Link>
-                        ) : null}
 
-                        <button
-                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                          disabled={b.copies_available <= 0}
-                          onClick={() => handleBorrow(b.id)}
-                          aria-label={`Borrow ${b.title}`}
-                          type="button"
-                        >
-                          Borrow
-                        </button>
-                      </div>
-                    </td>
+                    {(canEdit || canBorrow) ? (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          {canEdit ? (
+                            <>
+                              <Link
+                                to={`/books/${b.id}/edit`}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
+                                aria-label={`Edit ${b.title}`}
+                              >
+                                Edit
+                              </Link>
+
+                              <button
+                                type="button"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
+                                onClick={() => handleAddStock(b.id)}
+                                aria-label={`Add stock to ${b.title}`}
+                              >
+                                Add Stock
+                              </button>
+                            </>
+                          ) : null}
+
+                          {canBorrow ? (
+                            <button
+                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                              disabled={b.copies_available <= 0 || queueFull}
+                              onClick={() => handleBorrow(b.id)}
+                              aria-label={`Borrow ${b.title}`}
+                              type="button"
+                              title={queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined}
+                            >
+                              Borrow
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

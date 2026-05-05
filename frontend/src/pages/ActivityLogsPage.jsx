@@ -7,6 +7,7 @@ function formatAction(action) {
   const map = {
     "auth.login_success": "Login successful",
     "auth.login_failed": "Login failed",
+    "auth.logout": "Logout successful",
 
     "borrow.borrow": "Borrowed book",
     "borrow.return": "Returned book",
@@ -48,6 +49,9 @@ function formatDescription(action, details) {
   }
   if (action === "auth.login_failed") {
     return `Failed login (${details.email || "—"}) — ${details.reason || "unknown reason"}`;
+  }
+  if (action === "auth.logout") {
+    return `Logged out (${details.email || "—"})`;
   }
 
   // Borrow
@@ -101,6 +105,8 @@ function formatDescription(action, details) {
     .map(([k, v]) => `${k}: ${String(v)}`);
   return entries.join(" • ");
 }
+
+
 
 export default function ActivityLogsPage() {
   const [items, setItems] = useState([]);

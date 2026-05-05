@@ -4,7 +4,7 @@ declare(strict_types=1);
 return [
   'app' => [
     'env' => 'local',
-    'base_url' => 'http://localhost/university-library/backend/public',
+    'base_url' => 'http://localhost/university-library/backend/public/index.php',
   ],
 
   // ✅ ADD THIS (frontend URL for reset link)
@@ -35,7 +35,7 @@ return [
     'secret' => 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET',
     'issuer' => 'university-library-api',
     'audience' => 'university-library-web',
-    'expires_in_seconds' => 60 * 60 * 8,
+    'expires_in_seconds' => 60 * 5, // 5 minutes
   ],
   'cors' => [
     'allowed_origins' => [

@@ -1,24 +1,60 @@
 import React, { useMemo, useState } from "react";
-import { apiCommitBooksImport, apiPreviewBooksCsv } from "../../api/importBooks";
+import { apiCommitBooksImport, apiCreateBookManual, apiPreviewBooksCsv } from "../../api/importBooks";
 import Alert from "../../components/Alert";
 
+const EMPTY_BOOK = {
+  title: "",
+  author: "",
+  isbn: "",
+  category_id: "",
+  year: "",
+  description: "",
+  copies_total: "1",
+  shelf_location: ""
+};
+
+function toIntOrNull(v) {
+  const s = String(v ?? "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
+}
+
+function toStrOrNull(v) {
+  const s = String(v ?? "").trim();
+  return s === "" ? null : s;
+}
+
+function hasExistingIsbnError(row) {
+  const errs = row?.errors || [];
+  return errs.some((e) => String(e || "").toLowerCase().includes("isbn already exists"));
+}
+
 export default function ImportBooksPage() {
+  // bulk import state
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
   const [requiredCols, setRequiredCols] = useState([]);
 
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingCommit, setLoadingCommit] = useState(false);
+
+  // manual add state
+  const [showManual, setShowManual] = useState(true);
+  const [book, setBook] = useState(EMPTY_BOOK);
+  const [loadingManual, setLoadingManual] = useState(false);
+
+  // shared state
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [summary, setSummary] = useState(null);
 
-  const validRows = useMemo(() => {
-    return preview.filter((r) => (r.errors || []).length === 0);
-  }, [preview]);
+  const validRows = useMemo(() => preview.filter((r) => (r.errors || []).length === 0), [preview]);
+  const invalidRows = useMemo(() => preview.filter((r) => (r.errors || []).length > 0), [preview]);
 
-  const invalidRows = useMemo(() => {
-    return preview.filter((r) => (r.errors || []).length > 0);
+  const existingIsbnCount = useMemo(() => {
+    return preview.reduce((acc, r) => acc + (hasExistingIsbnError(r) ? 1 : 0), 0);
   }, [preview]);
 
   async function handlePreview(e) {
@@ -38,8 +74,24 @@ export default function ImportBooksPage() {
     try {
       const res = await apiPreviewBooksCsv(file);
       setRequiredCols(res.required_columns || []);
-      setPreview(res.preview || []);
-      setNotice("Preview generated. Review errors before saving.");
+      const p = res.preview || [];
+      setPreview(p);
+
+      // ✅ clearer messaging
+      if (p.length === 0) {
+        setNotice("No rows found in CSV.");
+      } else {
+        setNotice("Preview generated. Review errors before saving.");
+      }
+
+      // ✅ prompt if existing ISBNs detected
+      const existsCount = p.reduce((acc, r) => acc + (hasExistingIsbnError(r) ? 1 : 0), 0);
+      if (existsCount > 0) {
+        setError(
+          `${existsCount} row(s) have an ISBN that already exists in the book list. ` +
+            `Those rows cannot be saved. Please use "Add Stock" from the Books page instead.`
+        );
+      }
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Preview failed");
     } finally {
@@ -58,7 +110,10 @@ export default function ImportBooksPage() {
     }
 
     if (validRows.length === 0) {
-      setError("No valid rows to import. Fix CSV errors first.");
+      setError(
+        'No valid rows to import. Some rows may have existing ISBNs. ' +
+          'Fix CSV errors or use "Add Stock" instead.'
+      );
       return;
     }
 
@@ -67,6 +122,14 @@ export default function ImportBooksPage() {
       const res = await apiCommitBooksImport(validRows);
       setSummary(res.summary);
       setNotice("Import finished.");
+
+      // Optional: remind if there were blocked rows in preview
+      if (existingIsbnCount > 0) {
+        setError(
+          `${existingIsbnCount} row(s) were blocked because ISBN already exists. ` +
+            `Use "Add Stock" for those books.`
+        );
+      }
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Import failed");
     } finally {
@@ -74,13 +137,189 @@ export default function ImportBooksPage() {
     }
   }
 
+  async function handleManualSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setNotice("");
+    setSummary(null);
+
+    const payload = {
+      title: String(book.title || "").trim(),
+      author: toStrOrNull(book.author),
+      isbn: toStrOrNull(book.isbn),
+      category_id: toIntOrNull(book.category_id),
+      year: toIntOrNull(book.year),
+      description: toStrOrNull(book.description),
+      copies_total: toIntOrNull(book.copies_total) ?? 1,
+      shelf_location: toStrOrNull(book.shelf_location)
+    };
+
+    if (!payload.title) {
+      setError("Title is required.");
+      return;
+    }
+    if (payload.copies_total !== null && payload.copies_total < 0) {
+      setError("Copies must be 0 or more.");
+      return;
+    }
+
+    setLoadingManual(true);
+    try {
+      await apiCreateBookManual(payload);
+      setNotice("Book added successfully.");
+      setBook(EMPTY_BOOK);
+    } catch (e2) {
+      const msg = e2?.response?.data?.error || e2?.message || "Failed to add book";
+      if (e2?.response?.status === 409) {
+        setError(`${msg} Please use "Add Stock" from the Books page instead.`);
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setLoadingManual(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-semibold">Import Books (CSV)</h1>
       <p className="mt-1 text-sm text-slate-600 a11y-muted">
-        Upload a CSV file → preview → then save. No manual add-book form is provided initially.
+        Upload a CSV file → preview → then save. You can also add books manually.
       </p>
 
+      {/* Manual Add */}
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Manual Add (Single Book)</div>
+            <div className="text-xs text-slate-500 a11y-muted">
+              Adds one book directly (keeps bulk import available below).
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60 a11y-surface a11y-outline"
+            onClick={() => setShowManual((s) => !s)}
+          >
+            {showManual ? "Hide" : "Show"}
+          </button>
+        </div>
+
+        {showManual ? (
+          <form onSubmit={handleManualSubmit} className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Title *</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.title}
+                onChange={(e) => setBook({ ...book, title: e.target.value })}
+                placeholder="e.g. Clean Code"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Author</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.author}
+                onChange={(e) => setBook({ ...book, author: e.target.value })}
+                placeholder="e.g. Robert C. Martin"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">ISBN</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.isbn}
+                onChange={(e) => setBook({ ...book, isbn: e.target.value })}
+                placeholder="e.g. 9780132350884"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Category ID</label>
+              <input
+                type="number"
+                min={1}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.category_id}
+                onChange={(e) => setBook({ ...book, category_id: e.target.value })}
+                placeholder="e.g. 1"
+              />
+              <div className="mt-1 text-xs text-slate-500 a11y-muted">Temporary: numeric id (we can switch to dropdown later).</div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Year</label>
+              <input
+                type="number"
+                min={0}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.year}
+                onChange={(e) => setBook({ ...book, year: e.target.value })}
+                placeholder="e.g. 2026"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Copies Total</label>
+              <input
+                type="number"
+                min={0}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.copies_total}
+                onChange={(e) => setBook({ ...book, copies_total: e.target.value })}
+                placeholder="e.g. 5"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Shelf Location</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.shelf_location}
+                onChange={(e) => setBook({ ...book, shelf_location: e.target.value })}
+                placeholder="e.g. A1-CS"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Description</label>
+              <textarea
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                value={book.description}
+                onChange={(e) => setBook({ ...book, description: e.target.value })}
+                placeholder="Optional notes/description"
+              />
+            </div>
+
+            <div className="md:col-span-2 flex items-center gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                disabled={loadingManual}
+              >
+                {loadingManual ? "Adding…" : "Add Book"}
+              </button>
+
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60 a11y-surface a11y-outline"
+                onClick={() => setBook(EMPTY_BOOK)}
+                disabled={loadingManual}
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      {/* Bulk Import */}
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <form onSubmit={handlePreview} className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1">
@@ -114,6 +353,7 @@ export default function ImportBooksPage() {
             onClick={handleCommit}
             disabled={loadingCommit || validRows.length === 0}
             aria-label="Save import"
+            title={validRows.length === 0 ? 'No valid rows (existing ISBNs or other errors).' : undefined}
           >
             {loadingCommit ? "Saving…" : `Save (${validRows.length} valid)`}
           </button>
