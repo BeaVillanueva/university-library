@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import Alert from "../components/Alert";
+import AccessibilitySettingsPanel from "../components/AccessibilitySettingsPanel";
 import { setApiBaseUrl, http } from "../api/http";
 import { useAuth } from "../state/AuthContext";
 
@@ -35,9 +36,8 @@ export default function SettingsPage() {
   function reset() {
     setNotice("");
     setError("");
-    setApiBaseUrl("");
     setApiBaseUrlState("http://localhost/university-library/backend/public");
-    setApiBaseUrl(null);
+    setApiBaseUrl("http://localhost/university-library/backend/public");
     http.defaults.baseURL = "http://localhost/university-library/backend/public";
     setNotice("Reset to default.");
   }
@@ -65,6 +65,12 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
+      {/* ✅ NEW: Accessibility (PWD) settings */}
+      <div className="mt-4">
+        <AccessibilitySettingsPanel />
+      </div>
+
+      {/* Existing API Base URL settings */}
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <div className="text-sm font-semibold">API Base URL</div>
         <div className="mt-2 text-xs text-slate-500 a11y-muted">

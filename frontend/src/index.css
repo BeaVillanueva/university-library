@@ -2,9 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Default: slightly larger text for everyone (light + dark) */
+/* OpenDyslexic font (local) */
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("./assets/fonts/OpenDyslexic-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("./assets/fonts/OpenDyslexic-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =========================================================
+   GLOBAL ACCESSIBILITY BASE
+   ========================================================= */
+
+/* ✅ Controlled by Accessibility Settings (default stays 18px) */
 html {
-  font-size: 18px;
+  font-size: var(--app-font-size, 18px);
 }
 
 /* Visible focus states (keyboard navigation) */
@@ -13,7 +34,15 @@ html {
   outline-offset: 2px;
 }
 
-/* Accessibility mode (high contrast) */
+/* Table horizontal scroll helper */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* =========================================================
+   LEGACY A11Y MODE (UiContext) — KEEP for backward compatibility
+   (Uses: html[data-a11y="on"])
+   ========================================================= */
 html[data-a11y="on"] body {
   background: #0b1220;
   color: #f8fafc;
@@ -44,6 +73,122 @@ html[data-a11y="on"] .a11y-outline {
   border-color: #64748b;
 }
 
-.table-scroll {
-  overflow-x: auto;
+/* =========================================================
+   NEW ACCESSIBILITY SETTINGS (PWD)
+   - Theme: html.dark (Tailwind class-based dark mode)
+   - High contrast: html.hc
+   - Reduce motion: html.reduce-motion
+   - Dyslexia font: html.dyslexia-font
+   ========================================================= */
+
+/* Reduce motion (toggle + also respect OS setting) */
+html.reduce-motion * {
+  scroll-behavior: auto !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dyslexia-friendly font (note: OpenDyslexic must be loaded to take effect) */
+html.dyslexia-font {
+  font-family: "OpenDyslexic", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Arial, sans-serif !important;
+}
+
+/* =========================================================
+   HIGH CONTRAST MODE (html.hc)
+   Make it affect the WHOLE APP (html/body/#root)
+   ========================================================= */
+html.hc,
+html.hc body,
+html.hc #root {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Common surfaces/cards */
+html.hc .bg-white,
+html.hc .a11y-surface {
+  background: #0b1220 !important;
+  color: #fff !important;
+}
+
+/* Common muted text */
+html.hc .a11y-muted,
+html.hc .text-slate-900,
+html.hc .text-slate-800,
+html.hc .text-slate-700,
+html.hc .text-slate-600,
+html.hc .text-slate-500 {
+  color: #fff !important;
+}
+
+/* Stronger borders */
+html.hc .a11y-outline,
+html.hc .border-slate-200,
+html.hc .border-slate-300 {
+  border-color: #fff !important;
+}
+
+/* Inputs readable */
+html.hc input,
+html.hc select,
+html.hc textarea,
+html.hc .a11y-input {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+/* Strong focus in HC */
+html.hc :focus-visible {
+  outline: 3px solid #ffffff !important;
+  outline-offset: 2px !important;
+}
+
+/* =========================================================
+   DARK MODE FALLBACK (html.dark)
+   This makes Dark visible even if some components lack dark: variants.
+   ========================================================= */
+html.dark body {
+  background: #0b1220 !important;
+  color: #f8fafc !important;
+}
+
+/* Common white cards/surfaces */
+html.dark .bg-white {
+  background-color: #0f172a !important;
+}
+
+/* Common text colors */
+html.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+
+/* Common borders */
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+/* Inputs */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
 }

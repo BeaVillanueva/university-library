@@ -1,8 +1,10 @@
 // File: src/utils/idleLogout.js
-const IDLE_MS = 5 * 60 * 1000; // 5 minutes
+// Get timeout from environment variable, default to 30 minutes
+const IDLE_MS = parseInt(import.meta.env.VITE_IDLE_TIMEOUT_MS || "180000", 10);
 let timer = null;
 
 function logoutNow() {
+  console.log("[idleLogout] User inactive for 30+ minutes. Logging out...");
   localStorage.removeItem("ulms_token");
   localStorage.removeItem("ulms_user");
   if (!window.location.pathname.startsWith("/login")) {
@@ -20,6 +22,8 @@ function resetTimer() {
 }
 
 export function startIdleLogout() {
+  console.log(`[idleLogout] Started. User will be logged out after ${IDLE_MS / 60000} minutes of inactivity.`);
+  
   // start immediately
   resetTimer();
 

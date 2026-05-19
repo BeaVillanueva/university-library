@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { apiLogin, apiMe } from "../api/auth";
+import { applyA11yPrefs, DEFAULT_A11Y } from "./a11yPrefs";
 
 const AuthContext = createContext(null);
 
@@ -115,6 +116,9 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
+    // ✅ Reset accessibility UI for logged-out screens (login page)
+    applyA11yPrefs(DEFAULT_A11Y);
+
     setToken("");
     setUser(null);
     localStorage.removeItem(LS_TOKEN);

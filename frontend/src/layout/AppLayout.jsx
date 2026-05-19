@@ -102,7 +102,10 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
-  const { a11yMode, toggleA11yMode } = useUi();
+
+  // ✅ Removed toggleA11yMode from layout (A11y settings will be inside Settings page)
+  const { a11yMode } = useUi();
+
   const nav = useNavigate();
   const loc = useLocation();
 
@@ -120,10 +123,8 @@ export default function AppLayout() {
   const [usersOpen, setUsersOpen] = useState(() => loc.pathname.startsWith("/admin/users"));
   const [pendingCount, setPendingCount] = useState(0);
 
-  // ✅ pending borrow requests badge (librarian only)
   const [pendingBorrowsCount, setPendingBorrowsCount] = useState(0);
 
-  // Borrowing submenu (Librarian ONLY)
   const [borrowingOpen, setBorrowingOpen] = useState(() =>
     loc.pathname.startsWith("/librarian/borrowing")
   );
@@ -155,7 +156,6 @@ export default function AppLayout() {
     setOpen(false);
   }
 
-  // ✅ Admin: pending students badge
   useEffect(() => {
     let cancelled = false;
 
@@ -179,7 +179,6 @@ export default function AppLayout() {
     };
   }, [isAdmin]);
 
-  // ✅ Librarian: pending borrow requests badge
   useEffect(() => {
     let cancelled = false;
 
@@ -233,15 +232,9 @@ export default function AppLayout() {
             Menu
           </button>
           <div className="text-sm font-semibold text-slate-800">Menu</div>
-          <button
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-            onClick={toggleA11yMode}
-            aria-pressed={a11yMode}
-            aria-label="Toggle accessibility mode"
-            type="button"
-          >
-            A11y: {a11yMode ? "On" : "Off"}
-          </button>
+
+          {/* ✅ removed A11y button from AppLayout */}
+          <div className="w-[84px]" aria-hidden="true" />
         </div>
       </header>
 
@@ -299,7 +292,6 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
-              {/* ADMIN: Users + Reports only */}
               {isAdmin ? (
                 <>
                   <div>
@@ -372,7 +364,6 @@ export default function AppLayout() {
                 </>
               ) : null}
 
-              {/* LIBRARIAN: Import + Borrowing submenu */}
               {isLibrarian ? (
                 <>
                   <LinkItem
@@ -452,7 +443,6 @@ export default function AppLayout() {
                 </>
               ) : null}
 
-              {/* Books: everyone can view */}
               <LinkItem
                 to="/books"
                 label="Books"
@@ -461,7 +451,6 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
-              {/* My History: STUDENT only */}
               {isStudent ? (
                 <LinkItem
                   to="/my/borrows"
@@ -480,7 +469,6 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
-              {/* Activity logs: Admin + Librarian only */}
               {isAdmin || isLibrarian ? (
                 <LinkItem
                   to="/activity-logs"
@@ -492,7 +480,6 @@ export default function AppLayout() {
               ) : null}
             </nav>
 
-            {/* Logout */}
             <div className="pt-3 shrink-0">
               <button
                 type="button"
@@ -518,18 +505,7 @@ export default function AppLayout() {
         </aside>
 
         <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
-          <div className="mb-4 flex items-center justify-end">
-            <button
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-              onClick={toggleA11yMode}
-              aria-pressed={a11yMode}
-              aria-label="Toggle accessibility mode"
-              type="button"
-            >
-              A11y: {a11yMode ? "On" : "Off"}
-            </button>
-          </div>
-
+          {/* ✅ removed desktop A11y button */}
           <div className="rounded-[28px] bg-white p-4 shadow-sm lg:p-6 min-h-[calc(100vh-64px)]">
             <Outlet />
           </div>
