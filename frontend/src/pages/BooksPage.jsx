@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiListBooks, apiAddBookStock } from "../api/books";
+import { apiListBooks, apiAddBookStock, apiGetBook } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import { apiBorrowBook, apiCancelBorrow, apiMyBorrowHistory } from "../api/borrow";
 import { useAuth } from "../state/AuthContext";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 import TextToSpeechButton from "../components/TextToSpeechButton";
+import { FiBookOpen, FiCalendar, FiAlertCircle, FiX } from "react-icons/fi";
 
 export default function BooksPage() {
   const { user } = useAuth();
@@ -46,6 +47,7 @@ export default function BooksPage() {
 
   const [myBorrows, setMyBorrows] = useState([]);
   const [myBorrowsLoading, setMyBorrowsLoading] = useState(false);
+  const [borrowCovers, setBorrowCovers] = useState({}); // ✅ Cache for cover URLs
 
   const ttsText = useMemo(() => {
     return items
@@ -80,6 +82,24 @@ export default function BooksPage() {
     try {
       const res = await apiMyBorrowHistory({ page: 1, limit: 50 });
       setMyBorrows(res?.items || []);
+
+      // ✅ Fetch cover images for borrowed books
+      if (res?.items && res.items.length > 0) {
+        const newCovers = { ...borrowCovers };
+        for (const record of res.items) {
+          if (record.book_id && !newCovers[record.book_id]) {
+            try {
+              const bookRes = await apiGetBook(record.book_id);
+              if (bookRes?.book?.cover_image_url) {
+                newCovers[record.book_id] = bookRes.book.cover_image_url;
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+        setBorrowCovers(newCovers);
+      }
     } catch {
       setMyBorrows([]);
     } finally {
@@ -224,6 +244,29 @@ export default function BooksPage() {
     return `${PUBLIC_BASE}/${u}`;
   }
 
+  // ✅ Get cover URL for borrowed books
+  function getBorrowCoverSrc(bookId, record) {
+    const url = borrowCovers[bookId];
+    if (!url) return "";
+    return coverSrc({ cover_image_url: url });
+  }
+
+  function getStatusColor(status) {
+    const s = String(status || "").toLowerCase();
+    if (s === "overdue") return "bg-red-50 text-red-700 border-red-200";
+    if (s === "borrowed") return "bg-green-50 text-green-700 border-green-200";
+    if (s === "pending") return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-green-50 text-green-700 border-green-200"; // returned
+  }
+
+  function getDaysLeft(dueDate) {
+    if (!dueDate) return null;
+    const due = new Date(dueDate);
+    const now = new Date();
+    const diff = due - now;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
@@ -236,76 +279,143 @@ export default function BooksPage() {
         <TextToSpeechButton text={ttsText} label="Read the list of books aloud" />
       </div>
 
-      {/* Student: My Borrow Queue box */}
+      {/* ✅ MODERN: Student My Borrowed Books Card Grid */}
       {canBorrow ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
-          <div className="flex items-start justify-between gap-3">
+        <div className="mt-6">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <div>
-              <div className="text-sm font-semibold text-slate-800">My Borrowed Books</div>
-              <div className="text-xs text-slate-500">
-                Active (pending/borrowed/overdue):{" "}
-                <span className="font-semibold">
-                  {myActive.length}/{MAX_ACTIVE}
-                </span>
-              </div>
+              <h2 className="text-xl font-bold text-slate-900">My Borrowed Books</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Active (pending/borrowed/overdue): <span className="font-semibold text-slate-900">{myActive.length}/{MAX_ACTIVE}</span>
+              </p>
             </div>
-
             <button
               type="button"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-700 transition"
               onClick={loadMyBorrows}
+              disabled={myBorrowsLoading}
             >
-              Refresh
+              {myBorrowsLoading ? "Loading…" : "Refresh"}
             </button>
           </div>
 
           {myBorrowsLoading ? (
-            <div className="mt-3 text-sm text-slate-600">Loading…</div>
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin">
+                <FiBookOpen className="text-3xl text-slate-400" />
+              </div>
+              <p className="mt-2 text-slate-600">Loading your books…</p>
+            </div>
           ) : myActive.length === 0 ? (
-            <div className="mt-3 text-sm text-slate-600">No active requests/borrows.</div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-12 text-center">
+              <FiBookOpen className="mx-auto text-4xl text-slate-400 mb-3" />
+              <p className="text-slate-600 font-medium">No active requests or borrows</p>
+              <p className="text-sm text-slate-500 mt-1">Start by borrowing a book below</p>
+            </div>
           ) : (
-            <div className="mt-3 grid gap-2">
-              {myActive.slice(0, MAX_ACTIVE).map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-800">
-                      {r.title || "Book"}
-                    </div>
-                    <div className="text-xs text-slate-600">
-                      Status: <span className="font-semibold">{String(r.status || "—")}</span>
-                      {r.due_date ? ` • Due: ${r.due_date}` : ""}
-                    </div>
-                  </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myActive.map((record) => {
+                  // ✅ Use cached cover URL
+                  const coverUrl = getBorrowCoverSrc(record.book_id, record);
+                  const daysLeft = getDaysLeft(record.due_date);
+                  const isOverdue = daysLeft !== null && daysLeft < 0;
 
-                  <div className="flex items-center gap-2">
-                    {String(r.status || "").toLowerCase() === "pending" ? (
-                      <button
-                        type="button"
-                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                        onClick={() => handleCancelPending(r.id)}
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
+                  return (
+                    <div
+                      key={record.id}
+                      className="rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition overflow-hidden"
+                    >
+                      {/* Book Cover */}
+                      <div className="h-40 bg-slate-100 flex items-center justify-center overflow-hidden">
+                        {coverUrl ? (
+                          <img
+                            src={coverUrl}
+                            alt={record.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="text-slate-400 text-center">
+                            <FiBookOpen className="text-4xl mx-auto" />
+                            <p className="text-xs mt-2">No Cover</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Book Info */}
+                      <div className="p-4">
+                        <h3 className="font-bold text-slate-900 line-clamp-2 text-sm">
+                          {record.title || "Book"}
+                        </h3>
+                        <p className="text-xs text-slate-600 mt-1">{record.author || "Unknown Author"}</p>
+
+                        {/* Status Badge */}
+                        <div className="mt-3 mb-3">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold border ${getStatusColor(record.status)}`}>
+                            {String(record.status || "—").toUpperCase()}
+                          </span>
+                        </div>
+
+                        {/* Dates Info */}
+                        <div className="space-y-2 text-xs text-slate-600 mb-4">
+                          {record.borrow_date && (
+                            <div className="flex items-center gap-2">
+                              <FiCalendar className="text-slate-400 flex-shrink-0" />
+                              <span>Borrowed: <span className="font-mono text-slate-900">{record.borrow_date}</span></span>
+                            </div>
+                          )}
+                          
+                          {record.due_date && record.status !== "returned" && (
+                            <div className={`flex items-center gap-2 ${isOverdue ? "text-red-600" : ""}`}>
+                              <FiCalendar className={`flex-shrink-0 ${isOverdue ? "text-red-600" : "text-slate-400"}`} />
+                              <span className={isOverdue ? "font-semibold" : ""}>
+                                Due: <span className="font-mono">{record.due_date}</span>
+                              </span>
+                              {daysLeft !== null && (
+                                <span className={`ml-auto font-bold ${isOverdue ? "text-red-600" : daysLeft <= 3 ? "text-amber-600" : "text-green-600"}`}>
+                                  {isOverdue ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Button */}
+                        {String(record.status || "").toLowerCase() === "pending" && (
+                          <button
+                            type="button"
+                            className="w-full rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition flex items-center justify-center gap-2"
+                            onClick={() => handleCancelPending(record.id)}
+                          >
+                            <FiX className="text-sm" />
+                            Cancel Request
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {queueFull && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                  <FiAlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Maximum borrows reached</p>
+                    <p className="text-xs text-amber-700 mt-1">You can only have {MAX_ACTIVE} active requests/borrows. Cancel or return one to borrow another.</p>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
-
-          {queueFull ? (
-            <div className="mt-3 text-xs font-semibold text-rose-700">
-              You reached the maximum of {MAX_ACTIVE}. Cancel/return one to borrow another.
-            </div>
-          ) : null}
         </div>
       ) : null}
 
       {/* Filters */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
             <label className="text-xs text-slate-500 a11y-muted" htmlFor="q">
@@ -392,11 +502,21 @@ export default function BooksPage() {
       ) : null}
 
       {/* ✅ MODERNIZED: Card Grid Layout instead of table */}
-      <div className="mt-4">
+      <div className="mt-6">
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Browse All Books</h2>
+        
         {loading ? (
-          <div className="text-center text-slate-600 py-12">Loading books...</div>
+          <div className="text-center text-slate-600 py-12">
+            <div className="inline-block animate-spin">
+              <FiBookOpen className="text-3xl" />
+            </div>
+            <p className="mt-2">Loading books...</p>
+          </div>
         ) : items.length === 0 ? (
-          <div className="text-center text-slate-600 py-12">No books found.</div>
+          <div className="text-center text-slate-600 py-12">
+            <FiBookOpen className="text-4xl mx-auto mb-3 text-slate-400" />
+            <p>No books found.</p>
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

@@ -384,27 +384,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // ✅ NEW: Serve static files from /covers directory
-  if ($method === 'GET' && str_starts_with($path, '/covers/')) {
-    $filePath = __DIR__ . $path;
-    
-    // Security: prevent directory traversal
-    if (!str_contains(realpath($filePath ?: ''), realpath(__DIR__))) {
-      http_response_code(403);
-      exit;
-    }
-    
-    if (file_exists($filePath) && is_file($filePath)) {
-      $mime = mime_content_type($filePath);
-      header("Content-Type: {$mime}");
-      readfile($filePath);
-      exit;
-    }
-    
-    http_response_code(404);
-    exit;
-  }
-
   // decline: POST /users/{id}/decline
   $uid2 = Path::matchSuffixId($path, '/users/', '/decline');
   if ($uid2 !== null) {
@@ -413,6 +392,41 @@ if ($method === 'POST') {
     UsersController::decline(pdo($config), $auth, $uid2);
     exit;
   }
+}
+
+// ✅ FIXED: Serve static files from /covers directory (MUST BE AFTER ALL ROUTE CHECKS)
+if ($method === 'GET' && str_starts_with($path, '/covers/')) {
+  $filePath = __DIR__ . $path;
+  
+  // Check if file exists
+  if (!file_exists($filePath)) {
+    http_response_code(404);
+    exit;
+  }
+  
+  // Check if it's actually a file (not directory)
+  if (!is_file($filePath)) {
+    http_response_code(403);
+    exit;
+  }
+  
+  // Get MIME type using finfo
+  $finfo = finfo_open(FILEINFO_MIME_TYPE);
+  $mime = finfo_file($finfo, $filePath);
+  finfo_close($finfo);
+  
+  if (!$mime) {
+    $mime = 'application/octet-stream';
+  }
+  
+  // Set proper headers
+  header("Content-Type: {$mime}");
+  header("Cache-Control: public, max-age=3600");
+  header("Content-Length: " . filesize($filePath));
+  
+  // Send file
+  readfile($filePath);
+  exit;
 }
 
 $router->dispatch($method, $path);
