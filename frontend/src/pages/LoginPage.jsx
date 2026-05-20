@@ -17,7 +17,15 @@ export default function LoginPage() {
 
   const nav = useNavigate();
   const loc = useLocation();
-  const from = useMemo(() => loc.state?.from || "/", [loc.state]);
+
+  // ✅ FIX: default redirect is /app (dashboard), not landing "/"
+  const from = useMemo(() => {
+    const f = loc.state?.from;
+    // Support either string "/app/..." or location object { pathname: "/app/..." }
+    if (typeof f === "string") return f;
+    if (f && typeof f === "object" && typeof f.pathname === "string") return f.pathname;
+    return "/app";
+  }, [loc.state]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -210,7 +218,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* LOCK BANNER */}
-                {isLocked ? (
+                {lockedUntilMs && isLocked ? (
                   <div
                     className="rounded-lg border border-yellow-300/40 bg-yellow-500/20 px-4 py-3 text-sm text-white"
                     role="alert"
@@ -231,7 +239,6 @@ export default function LoginPage() {
                   </div>
                 ) : null}
 
-                {/* ✅ BULLETPROOF: disabled + pointer-events-none when locked */}
                 <button
                   type="submit"
                   className={[

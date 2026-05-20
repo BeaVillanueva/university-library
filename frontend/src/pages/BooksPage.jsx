@@ -15,7 +15,6 @@ export default function BooksPage() {
   const isLibrarian = role === "librarian";
   const isStudent = role === "student";
 
-  // ✅ Admin view-only, Librarian can edit, Student can borrow
   const canEdit = isLibrarian;
   const canBorrow = isStudent;
 
@@ -35,7 +34,6 @@ export default function BooksPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  // ✅ student queue
   const [myBorrows, setMyBorrows] = useState([]);
   const [myBorrowsLoading, setMyBorrowsLoading] = useState(false);
 
@@ -217,7 +215,7 @@ export default function BooksPage() {
         <TextToSpeechButton text={ttsText} label="Read the list of books aloud" />
       </div>
 
-      {/* ✅ Student: My Borrow Queue box */}
+      {/* Student: My Borrow Queue box */}
       {canBorrow ? (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
           <div className="flex items-start justify-between gap-3">
@@ -285,6 +283,7 @@ export default function BooksPage() {
         </div>
       ) : null}
 
+      {/* Filters */}
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
@@ -371,100 +370,106 @@ export default function BooksPage() {
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white a11y-surface a11y-outline">
-        <div className="table-scroll">
-          <table className="min-w-full text-sm">
-            <thead className="border-b border-slate-200">
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 a11y-muted">
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Author</th>
-                <th className="px-4 py-3">ISBN</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Avail</th>
-                {(canEdit || canBorrow) ? <th className="px-4 py-3"></th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={(canEdit || canBorrow) ? 6 : 5}>
-                    Loading…
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-4 text-slate-600 a11y-muted" colSpan={(canEdit || canBorrow) ? 6 : 5}>
-                    No books found.
-                  </td>
-                </tr>
-              ) : (
-                items.map((b) => (
-                  <tr key={b.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-medium">{b.title}</td>
-                    <td className="px-4 py-3">{b.author}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{b.isbn}</td>
-                    <td className="px-4 py-3">{b.category_name || "—"}</td>
-                    <td className="px-4 py-3">
+      {/* ✅ MODERNIZED: Card Grid Layout instead of table */}
+      <div className="mt-4">
+        {loading ? (
+          <div className="text-center text-slate-600 py-12">Loading books...</div>
+        ) : items.length === 0 ? (
+          <div className="text-center text-slate-600 py-12">No books found.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {items.map((b) => (
+                <div
+                  key={b.id}
+                  className="rounded-lg border border-slate-200 shadow-sm hover:shadow-lg transition overflow-hidden bg-white a11y-surface a11y-outline"
+                >
+                  {/* Book Cover Image */}
+                  <div className="h-48 bg-slate-100 flex items-center justify-center overflow-hidden">
+                    {b.cover_image_url ? (
+                      <img
+                        src={b.cover_image_url}
+                        alt={b.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-slate-400 text-center">
+                        <div className="text-5xl">📖</div>
+                        <p className="text-xs mt-2">No Cover</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Book Info */}
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm line-clamp-2 text-slate-900">
+                      {b.title}
+                    </h3>
+                    <p className="text-xs text-slate-600 mt-1">{b.author || "Unknown"}</p>
+                    <p className="text-xs text-slate-500 mt-1">{b.category_name || "—"}</p>
+
+                    {/* Availability Badge */}
+                    <div className="mt-3 mb-3">
                       <span
                         className={[
                           "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                          b.copies_available > 0 ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"
+                          b.copies_available > 0
+                            ? "bg-green-50 text-green-700"
+                            : "bg-slate-100 text-slate-600"
                         ].join(" ")}
                         aria-label={`Copies available ${b.copies_available}`}
                       >
                         {b.copies_available}/{b.copies_total}
                       </span>
-                    </td>
+                    </div>
 
-                    {(canEdit || canBorrow) ? (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
-                          {canEdit ? (
-                            <>
-                              <Link
-                                to={`/books/${b.id}/edit`}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
-                                aria-label={`Edit ${b.title}`}
-                              >
-                                Edit
-                              </Link>
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 flex-wrap">
+                      {canEdit ? (
+                        <>
+                          <Link
+                            to={`/app/books/${b.id}/edit`}
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-center hover:bg-slate-50 a11y-surface a11y-outline"
+                            aria-label={`Edit ${b.title}`}
+                          >
+                            Edit
+                          </Link>
 
-                              <button
-                                type="button"
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
-                                onClick={() => handleAddStock(b.id)}
-                                aria-label={`Add stock to ${b.title}`}
-                              >
-                                Add Stock
-                              </button>
-                            </>
-                          ) : null}
+                          <button
+                            type="button"
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
+                            onClick={() => handleAddStock(b.id)}
+                            aria-label={`Add stock to ${b.title}`}
+                          >
+                            Stock
+                          </button>
+                        </>
+                      ) : null}
 
-                          {canBorrow ? (
-                            <button
-                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                              disabled={b.copies_available <= 0 || queueFull}
-                              onClick={() => handleBorrow(b.id)}
-                              aria-label={`Borrow ${b.title}`}
-                              type="button"
-                              title={queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined}
-                            >
-                              Borrow
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {canBorrow ? (
+                        <button
+                          className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                          disabled={b.copies_available <= 0 || queueFull}
+                          onClick={() => handleBorrow(b.id)}
+                          aria-label={`Borrow ${b.title}`}
+                          type="button"
+                          title={queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined}
+                        >
+                          Borrow
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
+            {/* Pagination */}
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

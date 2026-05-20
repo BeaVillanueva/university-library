@@ -39,7 +39,7 @@ final class BooksController {
       SELECT
         b.id, b.title, b.author, b.isbn, b.year, b.description,
         b.copies_total, b.copies_available, b.shelf_location, b.created_at,
-        b.category_id, c.name AS category_name
+        b.category_id, b.cover_image_url, c.name AS category_name
       FROM books b
       LEFT JOIN categories c ON c.id = b.category_id
       $whereSql
@@ -241,5 +241,99 @@ final class BooksController {
     ]);
 
     Http::ok(['message' => 'Stock added', 'book_id' => $id, 'qty' => $qty]);
+  }
+
+  /**
+   * ✅ Upload book cover (Librarian/Admin)
+   * POST /books/{id}/cover
+   * Expects multipart form-data with "cover" file field
+   * Only accepts JPG/PNG, max 5MB
+   */
+  public static function uploadCover(PDO $pdo, array $auth, int $id): void {
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+
+    // Validate book exists
+    $stmt = $pdo->prepare("SELECT id, title FROM books WHERE id = ? LIMIT 1");
+    $stmt->execute([$id]);
+    $book = $stmt->fetch();
+    if (!$book) Http::error('Book not found', 404);
+
+    // Check if file was uploaded
+    if (!isset($_FILES['cover'])) {
+      Http::error('No file uploaded', 422);
+    }
+
+    $file = $_FILES['cover'];
+    $error = (int)$file['error'];
+    
+    if ($error !== UPLOAD_ERR_OK) {
+      Http::error('File upload failed (error code: ' . $error . ')', 422);
+    }
+
+    $tmpName = (string)$file['tmp_name'];
+    $fileName = (string)$file['name'];
+    $fileSize = (int)$file['size'];
+    $fileMime = (string)mime_content_type($tmpName);
+
+    // Validate file type
+    if (!in_array($fileMime, ['image/jpeg', 'image/png'], true)) {
+      Http::error('Only JPG and PNG files are allowed', 422);
+    }
+
+    // Validate file size (max 5MB)
+    $maxSize = 5 * 1024 * 1024; // 5MB
+    if ($fileSize > $maxSize) {
+      Http::error('File size must be less than 5MB', 422);
+    }
+
+    // Generate unique filename
+    $ext = $fileMime === 'image/jpeg' ? 'jpg' : 'png';
+    $newFileName = 'book-' . $id . '-' . time() . '.' . $ext;
+    $coverDir = __DIR__ . '/../../public/covers';
+
+    // Create directory if it doesn't exist
+    if (!is_dir($coverDir)) {
+      mkdir($coverDir, 0755, true);
+    }
+
+    $uploadPath = $coverDir . '/' . $newFileName;
+
+    // Move uploaded file
+    if (!move_uploaded_file($tmpName, $uploadPath)) {
+      Http::error('Failed to save file', 500);
+    }
+
+    // Delete old cover if exists
+    $oldCoverStmt = $pdo->prepare("SELECT cover_image_url FROM books WHERE id = ?");
+    $oldCoverStmt->execute([$id]);
+    $oldBook = $oldCoverStmt->fetch();
+    if ($oldBook && $oldBook['cover_image_url']) {
+      $oldPath = $coverDir . '/' . basename($oldBook['cover_image_url']);
+      if (file_exists($oldPath)) {
+        unlink($oldPath);
+      }
+    }
+
+    // Update database
+    $coverUrl = '/covers/' . $newFileName;
+    $upd = $pdo->prepare("UPDATE books SET cover_image_url = ? WHERE id = ?");
+    $upd->execute([$coverUrl, $id]);
+
+    // Log activity
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => (int)($auth['user_id'] ?? 0),
+      'action' => 'book.upload_cover',
+      'entity_type' => 'book',
+      'entity_id' => $id,
+      'details' => [
+        'filename' => $newFileName,
+        'title' => (string)($book['title'] ?? ''),
+      ],
+    ]);
+
+    Http::ok([
+      'message' => 'Cover uploaded successfully',
+      'cover_image_url' => $coverUrl
+    ]);
   }
 }

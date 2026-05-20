@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { apiGetBook, apiUpdateBook, apiUploadBookCover } from "../api/books";
+import { useNavigate } from "react-router-dom";
+import { apiCreateBook, apiUploadBookCover } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import Alert from "../components/Alert";
 
-export default function BookEditPage() {
-  const { id } = useParams();
-  const bookId = Number(id);
+export default function BookCreatePage() {
   const nav = useNavigate();
 
   const [categories, setCategories] = useState([]);
-  const [book, setBook] = useState(null);
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState({
+    title: "",
+    author: "",
+    isbn: "",
+    category_id: "",
+    year: "",
+    description: "",
+    copies_total: 1,
+    shelf_location: ""
+  });
 
+  const [coverFile, setCoverFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -21,44 +28,28 @@ export default function BookEditPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError("");
+    async function loadCats() {
       try {
-        const [bRes, cRes] = await Promise.all([apiGetBook(bookId), apiListCategories()]);
-        if (cancelled) return;
-
-        setBook(bRes.book);
-        setCategories(cRes.items || []);
-        setForm({
-          title: bRes.book.title || "",
-          author: bRes.book.author || "",
-          isbn: bRes.book.isbn || "",
-          category_id: bRes.book.category_id || "",
-          year: bRes.book.year || "",
-          description: bRes.book.description || "",
-          copies_total: bRes.book.copies_total ?? 0,
-          shelf_location: bRes.book.shelf_location || ""
-        });
-      } catch (e) {
-        if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load book");
-      } finally {
-        if (!cancelled) setLoading(false);
+        const res = await apiListCategories();
+        if (!cancelled) setCategories(res.items || []);
+      } catch {
+        // ignore
       }
     }
-    if (Number.isFinite(bookId) && bookId > 0) load();
+    loadCats();
     return () => {
       cancelled = true;
     };
-  }, [bookId]);
+  }, []);
 
   async function onSave(e) {
     e.preventDefault();
     setSaving(true);
     setError("");
     setNotice("");
+
     try {
-      const patch = {
+      const res = await apiCreateBook({
         title: form.title,
         author: form.author,
         isbn: form.isbn,
@@ -67,68 +58,59 @@ export default function BookEditPage() {
         description: form.description,
         copies_total: Number(form.copies_total),
         shelf_location: form.shelf_location
-      };
-      await apiUpdateBook(bookId, patch);
-      setNotice("Saved.");
-      const refreshed = await apiGetBook(bookId);
-      setBook(refreshed.book);
-    } catch (e2) {
-      setError(e2?.response?.data?.error || e2?.message || "Save failed");
+      });
+
+      const bookId = res.book_id;
+      setNotice("Book created!");
+
+      // ✅ Upload cover if selected
+      if (coverFile) {
+        setUploading(true);
+        try {
+          await apiUploadBookCover(bookId, coverFile);
+          setNotice("Book created with cover!");
+        } catch (err) {
+          setNotice("Book created but cover upload failed.");
+          console.error(err);
+        } finally {
+          setUploading(false);
+        }
+      }
+
+      setTimeout(() => nav("/books"), 1500);
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.message || "Failed to create book");
     } finally {
       setSaving(false);
     }
   }
 
-  // ✅ NEW: Handle book cover upload
-  async function handleCoverUpload(e) {
+  const handleCoverSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!["image/jpeg", "image/png"].includes(file.type)) {
       setError("Only JPG/PNG files are allowed.");
       return;
     }
 
-    // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setError("File size must be less than 5MB.");
       return;
     }
 
-    setUploading(true);
+    setCoverFile(file);
     setError("");
-    setNotice("");
-    try {
-      const res = await apiUploadBookCover(bookId, file);
-      setNotice("Cover uploaded successfully!");
-      const refreshed = await apiGetBook(bookId);
-      setBook(refreshed.book);
-    } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Failed to upload cover");
-    } finally {
-      setUploading(false);
-      // Reset file input
-      e.target.value = "";
-    }
-  }
-
-  if (loading) {
-    return <div className="text-sm text-slate-600 a11y-muted">Loading…</div>;
-  }
-  if (error && !notice) {
-    return <Alert type="error">{error}</Alert>;
-  }
-  if (!book || !form) return null;
+  };
 
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Edit Book</h1>
+          <h1 className="text-2xl font-semibold">Add New Book</h1>
           <p className="mt-1 text-sm text-slate-600 a11y-muted">
-            Updating copies_total will recompute copies_available using: copies_total - currently_borrowed.
+            Create a new book entry with optional cover image.
           </p>
         </div>
         <button
@@ -152,22 +134,22 @@ export default function BookEditPage() {
       ) : null}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Left: Book Cover Preview & Upload */}
+        {/* Left: Book Cover Upload */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 a11y-surface a11y-outline">
           <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
-          
+
           {/* Cover Preview */}
           <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-            {book.cover_image_url ? (
+            {coverFile ? (
               <img
-                src={book.cover_image_url}
-                alt={book.title}
+                src={URL.createObjectURL(coverFile)}
+                alt="Cover preview"
                 className="w-full h-full object-cover"
               />
             ) : (
               <div className="text-slate-400 text-center">
                 <div className="text-5xl">📖</div>
-                <p className="text-sm mt-2">No Cover</p>
+                <p className="text-sm mt-2">No Cover Selected</p>
               </div>
             )}
           </div>
@@ -180,7 +162,7 @@ export default function BookEditPage() {
             <input
               type="file"
               accept=".jpg,.jpeg,.png"
-              onChange={handleCoverUpload}
+              onChange={handleCoverSelect}
               disabled={uploading}
               className="w-full text-sm a11y-input a11y-outline"
               aria-label="Upload book cover"
@@ -273,7 +255,7 @@ export default function BookEditPage() {
                 <input
                   id="copies"
                   type="number"
-                  min="0"
+                  min="1"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
                   value={form.copies_total}
                   onChange={(e) => setForm({ ...form, copies_total: e.target.value })}
@@ -311,10 +293,10 @@ export default function BookEditPage() {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || uploading}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {saving || uploading ? "Creating..." : "Create Book"}
               </button>
               <button
                 type="button"

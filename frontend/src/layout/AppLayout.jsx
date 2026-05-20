@@ -102,8 +102,6 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
-
-  // ✅ Removed toggleA11yMode from layout (A11y settings will be inside Settings page)
   const { a11yMode } = useUi();
 
   const nav = useNavigate();
@@ -120,17 +118,21 @@ export default function AppLayout() {
   const isLibrarian = role === "librarian";
   const isStudent = role === "student";
 
-  const [usersOpen, setUsersOpen] = useState(() => loc.pathname.startsWith("/admin/users"));
+  // ✅ updated for /app prefix
+  const [usersOpen, setUsersOpen] = useState(() =>
+    loc.pathname.startsWith("/app/admin/users")
+  );
   const [pendingCount, setPendingCount] = useState(0);
 
   const [pendingBorrowsCount, setPendingBorrowsCount] = useState(0);
 
+  // ✅ updated for /app prefix
   const [borrowingOpen, setBorrowingOpen] = useState(() =>
-    loc.pathname.startsWith("/librarian/borrowing")
+    loc.pathname.startsWith("/app/librarian/borrowing")
   );
 
   useEffect(() => {
-    if (loc.pathname.startsWith("/librarian/borrowing")) setBorrowingOpen(true);
+    if (loc.pathname.startsWith("/app/librarian/borrowing")) setBorrowingOpen(true);
   }, [loc.pathname]);
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function AppLayout() {
   }, [collapsed]);
 
   useEffect(() => {
-    if (loc.pathname.startsWith("/admin/users")) setUsersOpen(true);
+    if (loc.pathname.startsWith("/app/admin/users")) setUsersOpen(true);
   }, [loc.pathname]);
 
   async function handleLogout() {
@@ -232,8 +234,6 @@ export default function AppLayout() {
             Menu
           </button>
           <div className="text-sm font-semibold text-slate-800">Menu</div>
-
-          {/* ✅ removed A11y button from AppLayout */}
           <div className="w-[84px]" aria-hidden="true" />
         </div>
       </header>
@@ -257,7 +257,7 @@ export default function AppLayout() {
               <div className="mt-1 flex items-center justify-center">
                 <button
                   type="button"
-                  onClick={() => nav("/settings")}
+                  onClick={() => nav("/app/settings")}
                   className="h-12 w-12 rounded-full bg-white/15 ring-2 ring-white/20 flex items-center justify-center hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                   aria-label="Account settings"
                   title="Account"
@@ -284,7 +284,7 @@ export default function AppLayout() {
             {/* Navigation */}
             <nav className="mt-3 space-y-1 flex-1 overflow-hidden px-1">
               <LinkItem
-                to="/"
+                to="/app"
                 end
                 label="Dashboard"
                 icon={FiHome}
@@ -301,7 +301,7 @@ export default function AppLayout() {
                       className={[
                         "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
                         "rounded-2xl h-11",
-                        loc.pathname.startsWith("/admin/users")
+                        loc.pathname.startsWith("/app/admin/users")
                           ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
                           : "text-white/85 hover:bg-white/10"
                       ].join(" ")}
@@ -329,7 +329,7 @@ export default function AppLayout() {
                     {usersOpen && !collapsed ? (
                       <div className="mt-1 space-y-1">
                         <SubLinkItem
-                          to="/admin/users/pending"
+                          to="/app/admin/users/pending"
                           label="Pending Approval"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
@@ -337,14 +337,14 @@ export default function AppLayout() {
                           badge={pendingCount}
                         />
                         <SubLinkItem
-                          to="/admin/users"
+                          to="/app/admin/users"
                           label="All Users"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
                           end
                         />
                         <SubLinkItem
-                          to="/admin/users/create"
+                          to="/app/admin/users/create"
                           label="Create User"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
@@ -358,7 +358,7 @@ export default function AppLayout() {
 
               {(isAdmin || isLibrarian) ? (
                 <LinkItem
-                  to="/admin/reports"
+                  to="/app/admin/reports"
                   label="Reports"
                   icon={FiBarChart2}
                   onNavigate={onNavigate}
@@ -369,7 +369,7 @@ export default function AppLayout() {
               {isLibrarian ? (
                 <>
                   <LinkItem
-                    to="/librarian/import"
+                    to="/app/librarian/import"
                     label="Import Books (CSV)"
                     icon={FiUpload}
                     onNavigate={onNavigate}
@@ -383,7 +383,7 @@ export default function AppLayout() {
                       className={[
                         "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
                         "rounded-2xl h-11",
-                        loc.pathname.startsWith("/librarian/borrowing")
+                        loc.pathname.startsWith("/app/librarian/borrowing")
                           ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
                           : "text-white/85 hover:bg-white/10"
                       ].join(" ")}
@@ -411,7 +411,7 @@ export default function AppLayout() {
                     {borrowingOpen && !collapsed ? (
                       <div className="mt-1 space-y-1">
                         <SubLinkItem
-                          to="/librarian/borrowing/pending"
+                          to="/app/librarian/borrowing/pending"
                           label="Pending Approvals"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
@@ -419,21 +419,21 @@ export default function AppLayout() {
                           badge={pendingBorrowsCount}
                         />
                         <SubLinkItem
-                          to="/librarian/borrowing/borrowed"
+                          to="/app/librarian/borrowing/borrowed"
                           label="Borrowed / Return"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
                           end
                         />
                         <SubLinkItem
-                          to="/librarian/borrowing/overdue"
+                          to="/app/librarian/borrowing/overdue"
                           label="Overdue"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
                           end
                         />
                         <SubLinkItem
-                          to="/librarian/borrowing/history"
+                          to="/app/librarian/borrowing/history"
                           label="History"
                           onNavigate={onNavigate}
                           collapsed={collapsed}
@@ -446,7 +446,7 @@ export default function AppLayout() {
               ) : null}
 
               <LinkItem
-                to="/books"
+                to="/app/books"
                 label="Books"
                 icon={FiBookOpen}
                 onNavigate={onNavigate}
@@ -455,7 +455,7 @@ export default function AppLayout() {
 
               {isStudent ? (
                 <LinkItem
-                  to="/my/borrows"
+                  to="/app/my/borrows"
                   label="My History"
                   icon={FiClock}
                   onNavigate={onNavigate}
@@ -464,7 +464,7 @@ export default function AppLayout() {
               ) : null}
 
               <LinkItem
-                to="/settings"
+                to="/app/settings"
                 label="Settings"
                 icon={FiSettings}
                 onNavigate={onNavigate}
@@ -473,7 +473,7 @@ export default function AppLayout() {
 
               {isAdmin || isLibrarian ? (
                 <LinkItem
-                  to="/activity-logs"
+                  to="/app/activity-logs"
                   label="Activity Logs"
                   icon={FiFileText}
                   onNavigate={onNavigate}
@@ -507,7 +507,6 @@ export default function AppLayout() {
         </aside>
 
         <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
-          {/* ✅ removed desktop A11y button */}
           <div className="rounded-[28px] bg-white p-4 shadow-sm lg:p-6 min-h-[calc(100vh-64px)]">
             <Outlet />
           </div>
