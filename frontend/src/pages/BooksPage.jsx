@@ -20,6 +20,16 @@ export default function BooksPage() {
 
   const MAX_ACTIVE = 3;
 
+  // ✅ IMPORTANT:
+  // Your API base is usually ".../public/index.php"
+  // But static files (covers) are served from ".../public" (WITHOUT index.php)
+  const API_BASE =
+    localStorage.getItem("ulms_api_base_url") ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "http://localhost/university-library/backend/public/index.php";
+
+  const PUBLIC_BASE = String(API_BASE).replace(/\/index\.php\/?$/i, "");
+
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -203,6 +213,17 @@ export default function BooksPage() {
     setAvailability("");
   }
 
+  function coverSrc(b) {
+    const u = (b?.cover_image_url || "").trim();
+    if (!u) return "";
+    // If backend ever returns an absolute URL, keep it
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    // If it starts with /covers/..., serve from PUBLIC_BASE
+    if (u.startsWith("/")) return `${PUBLIC_BASE}${u}`;
+    // Otherwise treat as relative path
+    return `${PUBLIC_BASE}/${u}`;
+  }
+
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
@@ -379,89 +400,100 @@ export default function BooksPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {items.map((b) => (
-                <div
-                  key={b.id}
-                  className="rounded-lg border border-slate-200 shadow-sm hover:shadow-lg transition overflow-hidden bg-white a11y-surface a11y-outline"
-                >
-                  {/* Book Cover Image */}
-                  <div className="h-48 bg-slate-100 flex items-center justify-center overflow-hidden">
-                    {b.cover_image_url ? (
-                      <img
-                        src={b.cover_image_url}
-                        alt={b.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-slate-400 text-center">
-                        <div className="text-5xl">📖</div>
-                        <p className="text-xs mt-2">No Cover</p>
-                      </div>
-                    )}
-                  </div>
+              {items.map((b) => {
+                const src = coverSrc(b);
 
-                  {/* Book Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-sm line-clamp-2 text-slate-900">
-                      {b.title}
-                    </h3>
-                    <p className="text-xs text-slate-600 mt-1">{b.author || "Unknown"}</p>
-                    <p className="text-xs text-slate-500 mt-1">{b.category_name || "—"}</p>
-
-                    {/* Availability Badge */}
-                    <div className="mt-3 mb-3">
-                      <span
-                        className={[
-                          "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                          b.copies_available > 0
-                            ? "bg-green-50 text-green-700"
-                            : "bg-slate-100 text-slate-600"
-                        ].join(" ")}
-                        aria-label={`Copies available ${b.copies_available}`}
-                      >
-                        {b.copies_available}/{b.copies_total}
-                      </span>
+                return (
+                  <div
+                    key={b.id}
+                    className="rounded-lg border border-slate-200 shadow-sm hover:shadow-lg transition overflow-hidden bg-white a11y-surface a11y-outline"
+                  >
+                    {/* Book Cover Image */}
+                    <div className="h-48 bg-slate-100 flex items-center justify-center overflow-hidden">
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={b.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            // show fallback if URL is broken
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="text-slate-400 text-center">
+                          <div className="text-5xl">📖</div>
+                          <p className="text-xs mt-2">No Cover</p>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 flex-wrap">
-                      {canEdit ? (
-                        <>
-                          <Link
-                            to={`/app/books/${b.id}/edit`}
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-center hover:bg-slate-50 a11y-surface a11y-outline"
-                            aria-label={`Edit ${b.title}`}
-                          >
-                            Edit
-                          </Link>
+                    {/* Book Info */}
+                    <div className="p-4">
+                      <h3 className="font-semibold text-sm line-clamp-2 text-slate-900">
+                        {b.title}
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-1">{b.author || "Unknown"}</p>
+                      <p className="text-xs text-slate-500 mt-1">{b.category_name || "—"}</p>
 
-                          <button
-                            type="button"
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
-                            onClick={() => handleAddStock(b.id)}
-                            aria-label={`Add stock to ${b.title}`}
-                          >
-                            Stock
-                          </button>
-                        </>
-                      ) : null}
-
-                      {canBorrow ? (
-                        <button
-                          className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                          disabled={b.copies_available <= 0 || queueFull}
-                          onClick={() => handleBorrow(b.id)}
-                          aria-label={`Borrow ${b.title}`}
-                          type="button"
-                          title={queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined}
+                      {/* Availability Badge */}
+                      <div className="mt-3 mb-3">
+                        <span
+                          className={[
+                            "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
+                            b.copies_available > 0
+                              ? "bg-green-50 text-green-700"
+                              : "bg-slate-100 text-slate-600"
+                          ].join(" ")}
+                          aria-label={`Copies available ${b.copies_available}`}
                         >
-                          Borrow
-                        </button>
-                      ) : null}
+                          {b.copies_available}/{b.copies_total}
+                        </span>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 flex-wrap">
+                        {canEdit ? (
+                          <>
+                            <Link
+                              to={`/app/books/${b.id}/edit`}
+                              className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-center hover:bg-slate-50 a11y-surface a11y-outline"
+                              aria-label={`Edit ${b.title}`}
+                            >
+                              Edit
+                            </Link>
+
+                            <button
+                              type="button"
+                              className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
+                              onClick={() => handleAddStock(b.id)}
+                              aria-label={`Add stock to ${b.title}`}
+                            >
+                              Stock
+                            </button>
+                          </>
+                        ) : null}
+
+                        {canBorrow ? (
+                          <button
+                            className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            disabled={b.copies_available <= 0 || queueFull}
+                            onClick={() => handleBorrow(b.id)}
+                            aria-label={`Borrow ${b.title}`}
+                            type="button"
+                            title={
+                              queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined
+                            }
+                          >
+                            Borrow
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Pagination */}

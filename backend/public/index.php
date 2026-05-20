@@ -55,6 +55,7 @@ require_once __DIR__ . '/../src/Controllers/ReportsController.php';
 require_once __DIR__ . '/../src/Utils/Text.php';
 require_once __DIR__ . '/../src/Utils/Mailer.php';
 
+
 $config = require __DIR__ . '/../config/config.php';
 Cors::handle($config['cors'] ?? []);
 
@@ -330,6 +331,15 @@ if ($method === 'POST') {
     exit;
   }
 
+  // ✅ upload cover: POST /books/{id}/cover (LIBRARIAN/ADMIN)
+  $cid = Path::matchSuffixId($path, '/books/', '/cover');
+  if ($cid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+    BooksController::uploadCover(pdo($config), $auth, $cid);
+    exit;
+  }
+
   // return: POST /borrow/{id}/return
   $rid = Path::matchSuffixId($path, '/borrow/', '/return');
   if ($rid !== null) {
@@ -340,11 +350,11 @@ if ($method === 'POST') {
   }
 
   // cancel: POST /borrow/{id}/cancel (STUDENT ONLY)
-  $cid = Path::matchSuffixId($path, '/borrow/', '/cancel');
-  if ($cid !== null) {
+  $cid2 = Path::matchSuffixId($path, '/borrow/', '/cancel');
+  if ($cid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['student']);
-    BorrowController::cancel(pdo($config), $auth, $cid);
+    BorrowController::cancel(pdo($config), $auth, $cid2);
     exit;
   }
 
@@ -374,6 +384,29 @@ if ($method === 'POST') {
     UsersController::approve(pdo($config), $auth, $uid);
     exit;
   }
+
+  // ✅ NEW: Serve static files from /covers directory
+  if ($method === 'GET' && str_starts_with($path, '/covers/')) {
+    $filePath = __DIR__ . $path;
+    
+    // Security: prevent directory traversal
+    if (!str_contains(realpath($filePath ?: ''), realpath(__DIR__))) {
+      http_response_code(403);
+      exit;
+    }
+    
+    if (file_exists($filePath) && is_file($filePath)) {
+      $mime = mime_content_type($filePath);
+      header("Content-Type: {$mime}");
+      readfile($filePath);
+      exit;
+    }
+    
+    http_response_code(404);
+    exit;
+  }
+
+  $router->dispatch($method, $path);
 
   // decline: POST /users/{id}/decline
   $uid2 = Path::matchSuffixId($path, '/users/', '/decline');

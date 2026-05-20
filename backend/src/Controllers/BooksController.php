@@ -289,11 +289,14 @@ final class BooksController {
     // Generate unique filename
     $ext = $fileMime === 'image/jpeg' ? 'jpg' : 'png';
     $newFileName = 'book-' . $id . '-' . time() . '.' . $ext;
-    $coverDir = __DIR__ . '/../../public/covers';
+    
+    // ✅ FIX: Correct public directory path
+    $publicDir = dirname(__DIR__, 2) . '/public';
+    $coverDir = $publicDir . '/covers';
 
     // Create directory if it doesn't exist
     if (!is_dir($coverDir)) {
-      mkdir($coverDir, 0755, true);
+      @mkdir($coverDir, 0755, true);
     }
 
     $uploadPath = $coverDir . '/' . $newFileName;
@@ -308,9 +311,9 @@ final class BooksController {
     $oldCoverStmt->execute([$id]);
     $oldBook = $oldCoverStmt->fetch();
     if ($oldBook && $oldBook['cover_image_url']) {
-      $oldPath = $coverDir . '/' . basename($oldBook['cover_image_url']);
+      $oldPath = $publicDir . $oldBook['cover_image_url'];
       if (file_exists($oldPath)) {
-        unlink($oldPath);
+        @unlink($oldPath);
       }
     }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiGetBook, apiUpdateBook, apiUploadBookCover } from "../api/books";
 import { apiListCategories } from "../api/categories";
@@ -9,6 +9,27 @@ export default function BookEditPage() {
   const bookId = Number(id);
   const nav = useNavigate();
 
+  // ✅ Same fix as BooksPage: API base may end with /index.php, but covers are served from /public
+  const API_BASE = useMemo(() => {
+    return (
+      localStorage.getItem("ulms_api_base_url") ||
+      import.meta.env.VITE_API_BASE_URL ||
+      "http://localhost/university-library/backend/public/index.php"
+    );
+  }, []);
+
+  const PUBLIC_BASE = useMemo(() => {
+    return String(API_BASE).replace(/\/index\.php\/?$/i, "");
+  }, [API_BASE]);
+
+  function toCoverSrc(url) {
+    const u = String(url || "").trim();
+    if (!u) return "";
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    if (u.startsWith("/")) return `${PUBLIC_BASE}${u}`;
+    return `${PUBLIC_BASE}/${u}`;
+  }
+
   const [categories, setCategories] = useState([]);
   const [book, setBook] = useState(null);
   const [form, setForm] = useState(null);
@@ -18,6 +39,9 @@ export default function BookEditPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  // local preview (instant preview while uploading)
+  const [localCoverPreview, setLocalCoverPreview] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +64,9 @@ export default function BookEditPage() {
           copies_total: bRes.book.copies_total ?? 0,
           shelf_location: bRes.book.shelf_location || ""
         });
+
+        // reset preview when loading a different book
+        setLocalCoverPreview("");
       } catch (e) {
         if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load book");
       } finally {
@@ -68,10 +95,11 @@ export default function BookEditPage() {
         copies_total: Number(form.copies_total),
         shelf_location: form.shelf_location
       };
+
       await apiUpdateBook(bookId, patch);
-      setNotice("Saved.");
-      const refreshed = await apiGetBook(bookId);
-      setBook(refreshed.book);
+
+      // ✅ redirect back to books list after saving
+      nav("/app/books", { replace: true });
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Save failed");
     } finally {
@@ -79,7 +107,7 @@ export default function BookEditPage() {
     }
   }
 
-  // ✅ NEW: Handle book cover upload
+  // ✅ Handle book cover upload
   async function handleCoverUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -87,6 +115,7 @@ export default function BookEditPage() {
     // Validate file type
     if (!["image/jpeg", "image/png"].includes(file.type)) {
       setError("Only JPG/PNG files are allowed.");
+      e.target.value = "";
       return;
     }
 
@@ -94,22 +123,34 @@ export default function BookEditPage() {
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setError("File size must be less than 5MB.");
+      e.target.value = "";
       return;
     }
+
+    // ✅ instant preview (local blob) while uploading
+    const previewUrl = URL.createObjectURL(file);
+    setLocalCoverPreview(previewUrl);
 
     setUploading(true);
     setError("");
     setNotice("");
     try {
-      const res = await apiUploadBookCover(bookId, file);
-      setNotice("Cover uploaded successfully!");
+      await apiUploadBookCover(bookId, file);
+
+      // refresh book to get new cover_image_url from backend
       const refreshed = await apiGetBook(bookId);
       setBook(refreshed.book);
+
+      // clear local preview so we show the real served image
+      URL.revokeObjectURL(previewUrl);
+      setLocalCoverPreview("");
+
+      setNotice("Cover uploaded successfully!");
     } catch (err) {
+      // keep local preview but show error
       setError(err?.response?.data?.error || err?.message || "Failed to upload cover");
     } finally {
       setUploading(false);
-      // Reset file input
       e.target.value = "";
     }
   }
@@ -117,24 +158,24 @@ export default function BookEditPage() {
   if (loading) {
     return <div className="text-sm text-slate-600 a11y-muted">Loading…</div>;
   }
-  if (error && !notice) {
+  if (error && !notice && !book) {
     return <Alert type="error">{error}</Alert>;
   }
   if (!book || !form) return null;
+
+  const coverSrc = localCoverPreview || toCoverSrc(book.cover_image_url);
 
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Edit Book</h1>
-          <p className="mt-1 text-sm text-slate-600 a11y-muted">
-            Updating copies_total will recompute copies_available using: copies_total - currently_borrowed.
-          </p>
         </div>
+
         <button
           type="button"
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-          onClick={() => nav("/books")}
+          onClick={() => nav("/app/books")}
         >
           Back
         </button>
@@ -155,14 +196,19 @@ export default function BookEditPage() {
         {/* Left: Book Cover Preview & Upload */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 a11y-surface a11y-outline">
           <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
-          
+
           {/* Cover Preview */}
           <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-            {book.cover_image_url ? (
+            {coverSrc ? (
               <img
-                src={book.cover_image_url}
+                src={coverSrc}
                 alt={book.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  // If served image breaks, fall back to no cover UI
+                  e.currentTarget.style.display = "none";
+                }}
               />
             ) : (
               <div className="text-slate-400 text-center">
@@ -185,7 +231,7 @@ export default function BookEditPage() {
               className="w-full text-sm a11y-input a11y-outline"
               aria-label="Upload book cover"
             />
-            {uploading && <p className="text-xs text-slate-600 mt-2">Uploading...</p>}
+            {uploading ? <p className="text-xs text-slate-600 mt-2">Uploading...</p> : null}
           </div>
         </div>
 
@@ -316,9 +362,10 @@ export default function BookEditPage() {
               >
                 {saving ? "Saving..." : "Save Changes"}
               </button>
+
               <button
                 type="button"
-                onClick={() => nav("/books")}
+                onClick={() => nav("/app/books")}
                 className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
               >
                 Cancel

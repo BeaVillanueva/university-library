@@ -41,9 +41,6 @@ export default function BorrowOverdueListPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Overdue</h1>
-          <p className="mt-1 text-sm text-slate-600 a11y-muted">
-            Overdue borrowed records (auto-marked by the server).
-          </p>
         </div>
         <button
           type="button"

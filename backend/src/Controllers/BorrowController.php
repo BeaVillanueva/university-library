@@ -584,6 +584,9 @@ final class BorrowController {
     $from = Query::date('from');
     $to = Query::date('to');
 
+    // ✅ NEW: search query
+    $q = Query::str('q', '');
+
     $page = Query::int('page', 1, 1);
     $limit = Query::int('limit', 10, 1, 100);
     $offset = ($page - 1) * $limit;
@@ -603,14 +606,42 @@ final class BorrowController {
     if ($from) { $where[] = "br.borrow_date >= ?"; $params[] = $from; }
     if ($to) { $where[] = "br.borrow_date <= ?"; $params[] = $to; }
 
+    // ✅ NEW: search across user + book (including student number if exists)
+    if ($q !== '') {
+      $where[] = "("
+        . "u.name LIKE ? OR u.email LIKE ? OR "
+        . "COALESCE(u.student_number,'') LIKE ? OR "
+        . "b.title LIKE ? OR b.isbn LIKE ?"
+        . ")";
+      $like = '%' . $q . '%';
+      $params[] = $like;
+      $params[] = $like;
+      $params[] = $like;
+      $params[] = $like;
+      $params[] = $like;
+    }
+
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-    $countStmt = $pdo->prepare("SELECT COUNT(*) AS c FROM borrow_records br $whereSql");
+    // count (needs same joins if WHERE uses u/b)
+    $countStmt = $pdo->prepare("
+      SELECT COUNT(*) AS c
+      FROM borrow_records br
+      JOIN users u ON u.id = br.user_id
+      JOIN books b ON b.id = br.book_id
+      $whereSql
+    ");
     $countStmt->execute($params);
     $total = (int)($countStmt->fetch()['c'] ?? 0);
 
     $stmt = $pdo->prepare("
-      SELECT br.*, u.name AS user_name, u.email AS user_email, b.title, b.isbn
+      SELECT
+        br.*,
+        u.name AS user_name,
+        u.email AS user_email,
+        u.student_number AS user_student_number,
+        b.title,
+        b.isbn
       FROM borrow_records br
       JOIN users u ON u.id = br.user_id
       JOIN books b ON b.id = br.book_id

@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiCommitBooksImport, apiCreateBookManual, apiPreviewBooksCsv } from "../../api/importBooks";
+import { apiUploadBookCover } from "../../api/books";
+import { apiListCategories } from "../../api/categories";
 import Alert from "../../components/Alert";
 
 const EMPTY_BOOK = {
@@ -32,7 +34,7 @@ function hasExistingIsbnError(row) {
 }
 
 export default function ImportBooksPage() {
-  // bulk import state
+  // ===== bulk import state =====
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
   const [requiredCols, setRequiredCols] = useState([]);
@@ -40,12 +42,20 @@ export default function ImportBooksPage() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingCommit, setLoadingCommit] = useState(false);
 
-  // manual add state
+  // ===== manual add state =====
   const [showManual, setShowManual] = useState(true);
   const [book, setBook] = useState(EMPTY_BOOK);
   const [loadingManual, setLoadingManual] = useState(false);
 
-  // shared state
+  // cover upload state (manual add)
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  // categories for dropdown
+  const [categories, setCategories] = useState([]);
+
+  // ===== shared state =====
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [summary, setSummary] = useState(null);
@@ -56,6 +66,23 @@ export default function ImportBooksPage() {
   const existingIsbnCount = useMemo(() => {
     return preview.reduce((acc, r) => acc + (hasExistingIsbnError(r) ? 1 : 0), 0);
   }, [preview]);
+
+  // load categories once
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCats() {
+      try {
+        const res = await apiListCategories();
+        if (!cancelled) setCategories(res.items || []);
+      } catch {
+        // ignore
+      }
+    }
+    loadCats();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handlePreview(e) {
     e.preventDefault();
@@ -77,14 +104,12 @@ export default function ImportBooksPage() {
       const p = res.preview || [];
       setPreview(p);
 
-      // ✅ clearer messaging
       if (p.length === 0) {
         setNotice("No rows found in CSV.");
       } else {
         setNotice("Preview generated. Review errors before saving.");
       }
 
-      // ✅ prompt if existing ISBNs detected
       const existsCount = p.reduce((acc, r) => acc + (hasExistingIsbnError(r) ? 1 : 0), 0);
       if (existsCount > 0) {
         setError(
@@ -123,7 +148,6 @@ export default function ImportBooksPage() {
       setSummary(res.summary);
       setNotice("Import finished.");
 
-      // Optional: remind if there were blocked rows in preview
       if (existingIsbnCount > 0) {
         setError(
           `${existingIsbnCount} row(s) were blocked because ISBN already exists. ` +
@@ -137,6 +161,43 @@ export default function ImportBooksPage() {
     }
   }
 
+  function resetManual() {
+    setBook(EMPTY_BOOK);
+    setCoverFile(null);
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverPreview("");
+  }
+
+  async function handleCoverPick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setError("Only JPG/PNG files are allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError("File size must be less than 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setError("");
+    setNotice("");
+
+    // preview
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    const previewUrl = URL.createObjectURL(file);
+    setCoverPreview(previewUrl);
+    setCoverFile(file);
+
+    // reset input value so same file can be picked again
+    e.target.value = "";
+  }
+
   async function handleManualSubmit(e) {
     e.preventDefault();
     setError("");
@@ -147,7 +208,7 @@ export default function ImportBooksPage() {
       title: String(book.title || "").trim(),
       author: toStrOrNull(book.author),
       isbn: toStrOrNull(book.isbn),
-      category_id: toIntOrNull(book.category_id),
+      category_id: book.category_id === "" ? null : Number(book.category_id),
       year: toIntOrNull(book.year),
       description: toStrOrNull(book.description),
       copies_total: toIntOrNull(book.copies_total) ?? 1,
@@ -165,9 +226,35 @@ export default function ImportBooksPage() {
 
     setLoadingManual(true);
     try {
-      await apiCreateBookManual(payload);
+      // 1) create book
+      const created = await apiCreateBookManual(payload);
+
+      // IMPORTANT:
+      // this must return { book_id: number } or { id: number }
+      const newId =
+        Number(created?.book_id) ||
+        Number(created?.id) ||
+        Number(created?.data?.book_id);
+
+      if (!Number.isFinite(newId) || newId <= 0) {
+        // book was created but we can't upload cover without id
+        setNotice("Book added successfully. (Cover upload skipped: missing book_id in response)");
+        resetManual();
+        return;
+      }
+
+      // 2) upload cover if selected
+      if (coverFile) {
+        setUploadingCover(true);
+        try {
+          await apiUploadBookCover(newId, coverFile);
+        } finally {
+          setUploadingCover(false);
+        }
+      }
+
       setNotice("Book added successfully.");
-      setBook(EMPTY_BOOK);
+      resetManual();
     } catch (e2) {
       const msg = e2?.response?.data?.error || e2?.message || "Failed to add book";
       if (e2?.response?.status === 409) {
@@ -179,6 +266,8 @@ export default function ImportBooksPage() {
       setLoadingManual(false);
     }
   }
+
+  const manualBusy = loadingManual || uploadingCover;
 
   return (
     <div>
@@ -207,113 +296,167 @@ export default function ImportBooksPage() {
         </div>
 
         {showManual ? (
-          <form onSubmit={handleManualSubmit} className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium">Title *</label>
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.title}
-                onChange={(e) => setBook({ ...book, title: e.target.value })}
-                placeholder="e.g. Clean Code"
-                required
-              />
+          <form onSubmit={handleManualSubmit} className="mt-4 grid gap-6 lg:grid-cols-3">
+            {/* Left: Cover */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 a11y-surface a11y-outline">
+              <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
+
+              <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+                {coverPreview ? (
+                  <img
+                    src={coverPreview}
+                    alt="Cover preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="text-slate-400 text-center">
+                    <div className="text-5xl">📖</div>
+                    <p className="text-sm mt-2">No Cover</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 a11y-muted mb-2">
+                  Upload Cover (JPG/PNG, max 5MB)
+                </label>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png"
+                  onChange={handleCoverPick}
+                  disabled={manualBusy}
+                  className="w-full text-sm a11y-input a11y-outline"
+                  aria-label="Upload book cover"
+                />
+                {uploadingCover ? (
+                  <p className="text-xs text-slate-600 mt-2">Uploading cover...</p>
+                ) : null}
+              </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium">Author</label>
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.author}
-                onChange={(e) => setBook({ ...book, author: e.target.value })}
-                placeholder="e.g. Robert C. Martin"
-              />
-            </div>
+            {/* Right: Details */}
+            <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-6 a11y-surface a11y-outline">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">Title *</label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.title}
+                    onChange={(e) => setBook({ ...book, title: e.target.value })}
+                    placeholder="e.g. Clean Code"
+                    required
+                    disabled={manualBusy}
+                  />
+                </div>
 
-            <div>
-              <label className="text-sm font-medium">ISBN</label>
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.isbn}
-                onChange={(e) => setBook({ ...book, isbn: e.target.value })}
-                placeholder="e.g. 9780132350884"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">Author</label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.author}
+                    onChange={(e) => setBook({ ...book, author: e.target.value })}
+                    placeholder="e.g. Robert C. Martin"
+                    disabled={manualBusy}
+                  />
+                </div>
 
-            <div>
-              <label className="text-sm font-medium">Category ID</label>
-              <input
-                type="number"
-                min={1}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.category_id}
-                onChange={(e) => setBook({ ...book, category_id: e.target.value })}
-                placeholder="e.g. 1"
-              />
-              <div className="mt-1 text-xs text-slate-500 a11y-muted">Temporary: numeric id (we can switch to dropdown later).</div>
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">ISBN</label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.isbn}
+                    onChange={(e) => setBook({ ...book, isbn: e.target.value })}
+                    placeholder="e.g. 9780132350884"
+                    disabled={manualBusy}
+                  />
+                </div>
 
-            <div>
-              <label className="text-sm font-medium">Year</label>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.year}
-                onChange={(e) => setBook({ ...book, year: e.target.value })}
-                placeholder="e.g. 2026"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">Category</label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.category_id}
+                    onChange={(e) => setBook({ ...book, category_id: e.target.value })}
+                    disabled={manualBusy}
+                  >
+                    <option value="">None</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label className="text-sm font-medium">Copies Total</label>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.copies_total}
-                onChange={(e) => setBook({ ...book, copies_total: e.target.value })}
-                placeholder="e.g. 5"
-              />
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 a11y-muted">Year</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
+                      value={book.year}
+                      onChange={(e) => setBook({ ...book, year: e.target.value })}
+                      placeholder="e.g. 2026"
+                      disabled={manualBusy}
+                    />
+                  </div>
 
-            <div>
-              <label className="text-sm font-medium">Shelf Location</label>
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.shelf_location}
-                onChange={(e) => setBook({ ...book, shelf_location: e.target.value })}
-                placeholder="e.g. A1-CS"
-              />
-            </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 a11y-muted">Copies Total</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                      value={book.copies_total}
+                      onChange={(e) => setBook({ ...book, copies_total: e.target.value })}
+                      disabled={manualBusy}
+                    />
+                  </div>
+                </div>
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium">Description</label>
-              <textarea
-                rows={3}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
-                value={book.description}
-                onChange={(e) => setBook({ ...book, description: e.target.value })}
-                placeholder="Optional notes/description"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">Shelf Location</label>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.shelf_location}
+                    onChange={(e) => setBook({ ...book, shelf_location: e.target.value })}
+                    placeholder="e.g. A1-CS"
+                    disabled={manualBusy}
+                  />
+                </div>
 
-            <div className="md:col-span-2 flex items-center gap-2">
-              <button
-                type="submit"
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                disabled={loadingManual}
-              >
-                {loadingManual ? "Adding…" : "Add Book"}
-              </button>
+                <div>
+                  <label className="block text-xs text-slate-500 a11y-muted">Description</label>
+                  <textarea
+                    rows={4}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm a11y-input a11y-outline"
+                    value={book.description}
+                    onChange={(e) => setBook({ ...book, description: e.target.value })}
+                    placeholder="Optional notes/description"
+                    disabled={manualBusy}
+                  />
+                </div>
 
-              <button
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60 a11y-surface a11y-outline"
-                onClick={() => setBook(EMPTY_BOOK)}
-                disabled={loadingManual}
-              >
-                Clear
-              </button>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    disabled={manualBusy}
+                  >
+                    {loadingManual ? "Adding…" : uploadingCover ? "Uploading Cover…" : "Add Book"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60 a11y-surface a11y-outline"
+                    onClick={resetManual}
+                    disabled={manualBusy}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         ) : null}
@@ -323,7 +466,7 @@ export default function ImportBooksPage() {
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <form onSubmit={handlePreview} className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1">
-            <label className="text-sm font-medium">CSV File</label>
+            <label className="text-sm font-medium">Bulk Import Books</label>
             <input
               type="file"
               accept=".csv,text/csv"
@@ -414,7 +557,10 @@ export default function ImportBooksPage() {
                   const d = r.data || {};
                   const hasErr = (r.errors || []).length > 0;
                   return (
-                    <tr key={r.row_number} className={`border-t border-slate-100 ${hasErr ? "bg-red-50/50" : ""}`}>
+                    <tr
+                      key={r.row_number}
+                      className={`border-t border-slate-100 ${hasErr ? "bg-red-50/50" : ""}`}
+                    >
                       <td className="px-4 py-3 font-mono text-xs">{r.row_number}</td>
                       <td className="px-4 py-3">{d.title}</td>
                       <td className="px-4 py-3">{d.author}</td>
