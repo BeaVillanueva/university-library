@@ -151,7 +151,6 @@ $router->add('POST', '/categories', function () use ($config) {
  * - create/update/addStock: admin/librarian
  */
 $router->add('GET', '/books', function () use ($config) {
-  AuthMiddleware::requireAuth($config);
   BooksController::list(pdo($config));
 });
 
@@ -405,8 +404,6 @@ if ($method === 'POST') {
     http_response_code(404);
     exit;
   }
-
-  $router->dispatch($method, $path);
 
   // decline: POST /users/{id}/decline
   $uid2 = Path::matchSuffixId($path, '/users/', '/decline');

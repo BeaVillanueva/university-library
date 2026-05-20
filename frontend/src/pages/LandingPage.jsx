@@ -1,67 +1,69 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   FiBookOpen,
   FiUserPlus,
-  FiArchive,
+  FiCheckCircle,
   FiMail,
-  FiMapPin,
-  FiUsers,
   FiSearch
 } from "react-icons/fi";
 
 export default function LandingPage() {
   const nav = useNavigate();
   const [q, setQ] = useState("");
+  const [featured, setFeatured] = useState([]);
+  const [loadingFeatured, setLoadingFeatured] = useState(false);
 
-  const featured = useMemo(
-    () => [
-      {
-        title: "Harry Potter",
-        author: "J.K. Rowling",
-        cover:
-          "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=600&q=60"
-      },
-      {
-        title: "Clean Code",
-        author: "Robert C. Martin",
-        cover:
-          "https://images.unsplash.com/photo-1528207776546-365bb710ee93?auto=format&fit=crop&w=600&q=60"
-      },
-      {
-        title: "The Hunger Games",
-        author: "Suzanne Collins",
-        cover:
-          "https://images.unsplash.com/photo-1524578271613-d550eacf6090?auto=format&fit=crop&w=600&q=60"
-      },
-      {
-        title: "After",
-        author: "Anna Todd",
-        cover:
-          "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=600&q=60"
-      },
-      {
-        title: "Linear Algebra",
-        author: "Sheldon Axler",
-        cover:
-          "https://images.unsplash.com/photo-1455885666463-26842f5afc43?auto=format&fit=crop&w=600&q=60"
-      },
-      {
-        title: "Swapped",
-        author: "Jannik Sinner",
-        cover:
-          "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=600&q=60"
+  // ✅ Load featured books from public API
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFeatured() {
+      setLoadingFeatured(true);
+      try {
+        const response = await fetch("http://localhost:8000/books?page=1&limit=6", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (!cancelled) {
+          setFeatured(data.items || []);
+        }
+      } catch (e) {
+        console.error("Failed to load featured books:", e);
+        setFeatured([]);
+      } finally {
+        if (!cancelled) setLoadingFeatured(false);
       }
-    ],
-    []
-  );
+    }
+    loadFeatured();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function onSearch(e) {
     e.preventDefault();
     const query = q.trim();
-    // redirect to your Books page with query param (optional)
-    if (!query) return nav("/books");
-    nav(`/books?query=${encodeURIComponent(query)}`);
+    // ✅ Redirect to app/books with search query
+    if (!query) return nav("/app/books");
+    nav(`/app/books?q=${encodeURIComponent(query)}`);
+  }
+
+  function onExploreBooks() {
+    // ✅ Scroll to featured books section
+    const section = document.getElementById("recommendation");
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth" });
+    } else {
+      nav("/app/books");
+    }
   }
 
   return (
@@ -78,8 +80,7 @@ export default function LandingPage() {
             <a href="#home" className="text-white/90 hover:text-white">Home</a>
             <a href="#profile" className="text-white/90 hover:text-white">Profile</a>
             <a href="#services" className="text-white/90 hover:text-white">Services</a>
-            <a href="#activities" className="text-white/90 hover:text-white">Activities</a>
-            <a href="#recommendation" className="text-white/90 hover:text-white">Recommendation</a>
+            <a href="#recommendation" className="text-white/90 hover:text-white">Featured Books</a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -120,6 +121,7 @@ export default function LandingPage() {
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-amber-300 sm:text-4xl">
                 CAVITE STATE UNIVERSITY IMUS CAMPUS
               </h1>
+              <p className="mt-2 text-sm text-white/80">University Library System</p>
 
               <form
                 onSubmit={onSearch}
@@ -144,7 +146,7 @@ export default function LandingPage() {
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => nav("/books")}
+                  onClick={onExploreBooks}
                   className="rounded-full bg-[#1b5e20] px-5 py-2 text-sm font-extrabold text-white hover:bg-[#1f6a24]"
                   type="button"
                 >
@@ -180,16 +182,16 @@ export default function LandingPage() {
           </div>
 
           <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-slate-900">Mission And Vision</h2>
+            <h2 className="text-lg font-extrabold text-slate-900">About Our Library</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
               Cavite State University is committed to providing excellent, equitable, and relevant
-              educational opportunities. This landing page is a template—replace this text with your
-              official mission & vision. You can add more sections such as history, goals, and
-              library policies.
+              educational opportunities. Our library system supports students and staff with access to
+              comprehensive book collections and learning services that encourage reading, research,
+              and lifelong learning.
             </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              The library supports students and staff through access to books, digital archives, and
-              learning services that encourage reading, research, and lifelong learning.
+              Browse our collection of books, manage your borrowing requests, and access library
+              services through our integrated system.
             </p>
           </div>
         </div>
@@ -221,11 +223,11 @@ export default function LandingPage() {
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <ServiceCard icon={FiUserPlus} title="Online Member Registration" />
-            <ServiceCard icon={FiBookOpen} title="Access E-Books" />
-            <ServiceCard icon={FiArchive} title="Digital Archives" />
-            <ServiceCard icon={FiMail} title="Library Requests" />
-            <ServiceCard icon={FiMapPin} title="Branch Locations" />
-            <ServiceCard icon={FiUsers} title="Kids & Teens Zone" />
+            <ServiceCard icon={FiBookOpen} title="Browse & Search Books" />
+            <ServiceCard icon={FiCheckCircle} title="Manage Borrow Requests" />
+            <ServiceCard icon={FiMail} title="Library Notifications" />
+            <ServiceCard icon={FiSearch} title="Advanced Search Filters" />
+            <ServiceCard icon={FiBookOpen} title="View Borrowing History" />
           </div>
         </div>
       </section>
@@ -235,42 +237,71 @@ export default function LandingPage() {
         <div className="text-center">
           <h3 className="text-lg font-extrabold text-slate-900">Featured Books</h3>
           <p className="mt-1 text-sm text-slate-600">
-            You can replace this with real data later (API call).
+            Latest additions to our collection
           </p>
         </div>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3">
-          {featured.map((b) => (
-            <div
-              key={b.title}
-              className="rounded-2xl bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
-            >
-              <div className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-slate-100">
-                <img
-                  alt={b.title}
-                  src={b.cover}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
+        <div className="mt-8">
+          {loadingFeatured ? (
+            <div className="text-center text-slate-600 py-12">
+              <div className="inline-block animate-spin">
+                <FiBookOpen className="text-2xl" />
               </div>
-              <div className="mt-3 text-sm font-extrabold text-slate-900">{b.title}</div>
-              <div className="text-xs font-semibold text-slate-500">{b.author}</div>
-              <button
-                onClick={() => nav("/login")}
-                className="mt-3 w-full rounded-xl bg-[#0f2b2a] px-4 py-2 text-sm font-extrabold text-white hover:bg-[#123534]"
-                type="button"
-              >
-                Borrow (Login)
-              </button>
+              <p className="mt-2">Loading featured books...</p>
             </div>
-          ))}
+          ) : featured.length === 0 ? (
+            <div className="text-center text-slate-600 py-12">
+              No books available yet. Please check back later!
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3">
+              {featured.map((b) => (
+                <div
+                  key={b.id}
+                  className="rounded-2xl bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+                >
+                  <div className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-slate-100">
+                    {b.cover_image_url ? (
+                      <img
+                        alt={b.title}
+                        src={b.cover_image_url}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center bg-slate-200">
+                        <div className="text-center text-slate-500">
+                          <FiBookOpen className="text-3xl mx-auto" />
+                          <p className="text-xs mt-2">No Cover</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 text-sm font-extrabold text-slate-900 truncate">{b.title}</div>
+                  <div className="text-xs font-semibold text-slate-500 truncate">{b.author || "Unknown"}</div>
+                  <div className="mt-2 text-xs text-slate-600">
+                    Available: <span className={`font-bold ${b.copies_available > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {b.copies_available}/{b.copies_total}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => nav("/login")}
+                    className="mt-3 w-full rounded-xl bg-[#0f2b2a] px-4 py-2 text-sm font-extrabold text-white hover:bg-[#123534]"
+                    type="button"
+                  >
+                    Borrow (Login)
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-black/10 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-8 text-center text-xs font-semibold text-slate-500">
-          © {new Date().getFullYear()} Library System. All rights reserved.
+          © {new Date().getFullYear()} Cavite State University - University Library System. All rights reserved.
         </div>
       </footer>
     </div>
