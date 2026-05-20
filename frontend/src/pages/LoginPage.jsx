@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
+import { getDefaultRoute } from "../state/AuthContext";
 import { FiEye, FiEyeOff, FiMail, FiLock } from "react-icons/fi";
 
 function formatSeconds(sec) {
@@ -18,14 +19,22 @@ export default function LoginPage() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  // ✅ FIX: default redirect is /app (dashboard), not landing "/"
+  // ✅ FIX: Determine redirect route based on role
   const from = useMemo(() => {
+    // If user just logged in and has a role, use role-based default
+    if (isAuthenticated && user) {
+      return getDefaultRoute(user);
+    }
+
+    // Otherwise, check if there's a "from" location stored
     const f = loc.state?.from;
     // Support either string "/app/..." or location object { pathname: "/app/..." }
     if (typeof f === "string") return f;
     if (f && typeof f === "object" && typeof f.pathname === "string") return f.pathname;
+    
+    // Fallback to dashboard
     return "/app";
-  }, [loc.state]);
+  }, [isAuthenticated, user, loc.state]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -153,7 +162,7 @@ export default function LoginPage() {
                     />
                     <input
                       id="email"
-                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30 disabled:opacity-60"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50 transition"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="email"
@@ -179,7 +188,7 @@ export default function LoginPage() {
                     <input
                       id="password"
                       type={showPw ? "text" : "password"}
-                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30 disabled:opacity-60"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50 transition"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="current-password"
@@ -242,7 +251,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   className={[
-                    "w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60",
+                    "w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60 transition",
                     isLocked ? "pointer-events-none cursor-not-allowed" : ""
                   ].join(" ")}
                   disabled={loading || isLocked}

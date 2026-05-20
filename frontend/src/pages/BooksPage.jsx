@@ -241,7 +241,7 @@ export default function BooksPage() {
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-800">My Borrow Queue</div>
+              <div className="text-sm font-semibold text-slate-800">My Borrowed Books</div>
               <div className="text-xs text-slate-500">
                 Active (pending/borrowed/overdue):{" "}
                 <span className="font-semibold">

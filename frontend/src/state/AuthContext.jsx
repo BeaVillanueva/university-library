@@ -30,6 +30,25 @@ function safeSetItem(key, value) {
   localStorage.setItem(key, value);
 }
 
+/**
+ * ✅ Get default route based on user role
+ * - student → /app/books (browse & borrow books)
+ * - librarian → /app/librarian/borrowing/pending (handle pending requests)
+ * - admin → /app/admin/users/pending (manage students)
+ * - default → /app (dashboard)
+ */
+export function getDefaultRoute(user) {
+  if (!user) return "/app";
+  
+  const role = user?.role || "";
+  
+  if (role === "student") return "/app/books";
+  if (role === "librarian") return "/app/librarian/borrowing/pending";
+  if (role === "admin") return "/app/admin/users/pending";
+  
+  return "/app";
+}
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => {
     const t = localStorage.getItem(LS_TOKEN);
@@ -132,7 +151,8 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(token),
       login,
-      logout
+      logout,
+      getDefaultRoute: () => getDefaultRoute(user)
     }),
     [token, user, loading]
   );
