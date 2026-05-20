@@ -209,12 +209,12 @@ $router->add('GET', '/reports/summary', function () use ($config) {
 });
 $router->add('GET', '/reports', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin']);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
   ReportsController::list(pdo($config));
-});
+}); 
 $router->add('GET', '/reports/export', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['admin']);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
   ReportsController::exportCsv(pdo($config));
 });
 $router->add('GET', '/reports/my-summary', function () use ($config) {

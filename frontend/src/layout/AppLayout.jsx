@@ -353,15 +353,17 @@ export default function AppLayout() {
                       </div>
                     ) : null}
                   </div>
-
-                  <LinkItem
-                    to="/admin/reports"
-                    label="Reports"
-                    icon={FiBarChart2}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                  />
                 </>
+              ) : null}
+
+              {(isAdmin || isLibrarian) ? (
+                <LinkItem
+                  to="/admin/reports"
+                  label="Reports"
+                  icon={FiBarChart2}
+                  onNavigate={onNavigate}
+                  collapsed={collapsed}
+                />
               ) : null}
 
               {isLibrarian ? (

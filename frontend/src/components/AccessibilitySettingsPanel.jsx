@@ -264,32 +264,6 @@ export default function AccessibilitySettingsPanel() {
             />
           </button>
         </div>
-
-        {/* Keyboard hints */}
-        <div className="rounded-xl border border-slate-200 p-3 a11y-outline">
-          <div className="text-sm font-semibold text-slate-900">Keyboard navigation hints</div>
-          <ul className="mt-2 space-y-1 text-sm text-slate-700 a11y-muted">
-            <li>
-              <b>Tab</b> / <b>Shift+Tab</b> to move focus
-            </li>
-            <li>
-              <b>Enter</b> / <b>Space</b> to activate buttons
-            </li>
-            <li>Use the sidebar links for quick navigation</li>
-          </ul>
-        </div>
-
-        {/* Screen reader indicator */}
-        <div
-          className="rounded-xl border border-slate-200 p-3 a11y-outline"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="text-sm font-semibold text-slate-900">Screen reader support</div>
-          <p className="mt-1 text-sm text-slate-700 a11y-muted">
-            This app uses semantic HTML and ARIA labels for better screen reader navigation.
-          </p>
-        </div>
       </div>
     </section>
   );

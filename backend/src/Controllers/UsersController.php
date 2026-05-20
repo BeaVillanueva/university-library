@@ -311,12 +311,47 @@ final class UsersController {
     }
   }
 
-  public static function delete(PDO $pdo, array $auth, int $id): void {
+ public static function delete(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
     $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, student_number, status FROM users WHERE id = ? LIMIT 1");
     $stmtOld->execute([$id]);
     $old = $stmtOld->fetch();
+
+    if (!$old) {
+      Http::error('User not found', 404);
+    }
+
+    // ✅ NEW: Check for active borrow records (pending, borrowed, or overdue)
+    $stmtBorrow = $pdo->prepare("
+      SELECT COUNT(*) AS c FROM borrow_records
+      WHERE user_id = ?
+        AND return_date IS NULL
+        AND status IN ('pending', 'borrowed', 'overdue')
+    ");
+    $stmtBorrow->execute([$id]);
+    $activeBorrows = (int)($stmtBorrow->fetch()['c'] ?? 0);
+
+    if ($activeBorrows > 0) {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'users.delete_failed',
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'details' => [
+          'reason' => 'has_active_borrow_records',
+          'active_borrow_count' => $activeBorrows,
+          'target_user_id' => $id,
+          'target_email' => (string)$old['email'],
+        ],
+      ]);
+
+      Http::error(
+        "Cannot delete user with active borrow records ({$activeBorrows}). Please resolve all pending, borrowed, or overdue books first.",
+        409,
+        ['active_borrow_count' => $activeBorrows]
+      );
+    }
 
     $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
     $stmt->execute([$id]);

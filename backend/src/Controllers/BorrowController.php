@@ -9,7 +9,7 @@ final class BorrowController {
    * - does NOT decrement copies yet
    */
   public static function borrow(PDO $pdo, array $config, array $auth): void {
-    OverdueService::refresh($pdo);
+    OverdueService::refresh($pdo, $config);
 
     // ✅ Student-only (extra safety kahit naka student-only na sa index.php)
     AuthMiddleware::requireRole($auth, ['student']);
@@ -221,7 +221,7 @@ final class BorrowController {
    * - decrements copies_available
    */
   public static function approve(PDO $pdo, array $config, array $auth, int $recordId): void {
-    OverdueService::refresh($pdo);
+    OverdueService::refresh($pdo, $config);
 
     AuthMiddleware::requireRole($auth, ['librarian']);
 
@@ -437,7 +437,7 @@ final class BorrowController {
   }
 
   /**
-   * ✅ Return book (Librarian ONLY)
+   * ✅ Return book (Librarian ONLY) - NOW WORKS WITH OVERDUE BOOKS
    */
   public static function returnBook(PDO $pdo, array $auth, int $recordId): void {
     OverdueService::refresh($pdo);
@@ -483,14 +483,15 @@ final class BorrowController {
       Http::error('Already returned', 409);
     }
 
-    if (in_array((string)$rec['status'], ['pending','declined'], true)) {
-      Http::error('Cannot return a request that is not borrowed', 409, ['status' => (string)$rec['status']]);
+    // ✅ FIX: Allow return of ANY unreturned record (borrowed, overdue, pending)
+    if (!in_array((string)$rec['status'], ['borrowed', 'overdue', 'pending'], true)) {
+      Http::error('Cannot return a book with status: ' . $rec['status'], 409, ['status' => (string)$rec['status']]);
     }
 
     $pdo->beginTransaction();
     try {
       $retDate = date('Y-m-d');
-      $upd = $pdo->prepare("UPDATE borrow_records SET return_date = ?, status = 'returned' WHERE id = ? AND return_date IS NULL");
+      $upd = $pdo->prepare("UPDATE borrow_records SET return_date = ?, status = 'returned', updated_at = NOW() WHERE id = ? AND return_date IS NULL");
       $upd->execute([$retDate, $recordId]);
 
       $bookId = (int)$rec['book_id'];
@@ -511,10 +512,11 @@ final class BorrowController {
           'borrower_name' => (string)($rec['borrower_name'] ?? ''),
           'borrower_email' => (string)($rec['borrower_email'] ?? ''),
           'return_date' => $retDate,
+          'was_overdue' => $rec['status'] === 'overdue' ? 'yes' : 'no',
         ],
       ]);
 
-      Http::ok(['message' => 'Returned']);
+      Http::ok(['message' => 'Returned', 'record_id' => $recordId, 'return_date' => $retDate]);
     } catch (Throwable $e) {
       $pdo->rollBack();
 

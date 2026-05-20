@@ -105,52 +105,55 @@ html.dyslexia-font {
 
 /* =========================================================
    HIGH CONTRAST MODE (html.hc)
-   Make it affect the WHOLE APP (html/body/#root)
+   Improves contrast WITHOUT forcing dark background
+   Works independently with any theme!
    ========================================================= */
-html.hc,
-html.hc body,
-html.hc #root {
-  background: #000 !important;
-  color: #fff !important;
+
+/* Define high contrast color variables */
+html.hc {
+  --hc-text: #000;
+  --hc-bg: #fff;
+  --hc-border: #000;
 }
 
-/* Common surfaces/cards */
-html.hc .bg-white,
-html.hc .a11y-surface {
-  background: #0b1220 !important;
-  color: #fff !important;
+/* When high contrast + dark mode: adjust colors */
+html.hc.dark {
+  --hc-text: #fff;
+  --hc-bg: #000;
+  --hc-border: #fff;
 }
 
-/* Common muted text */
-html.hc .a11y-muted,
+/* Apply stronger contrasts to common text elements */
 html.hc .text-slate-900,
 html.hc .text-slate-800,
 html.hc .text-slate-700,
 html.hc .text-slate-600,
-html.hc .text-slate-500 {
-  color: #fff !important;
+html.hc .text-slate-500,
+html.hc .a11y-muted {
+  color: var(--hc-text) !important;
 }
 
 /* Stronger borders */
 html.hc .a11y-outline,
 html.hc .border-slate-200,
 html.hc .border-slate-300 {
-  border-color: #fff !important;
+  border-color: var(--hc-border) !important;
+  border-width: 2px !important;
 }
 
-/* Inputs readable */
+/* Inputs with high contrast */
 html.hc input,
 html.hc select,
 html.hc textarea,
 html.hc .a11y-input {
-  background: #000 !important;
-  color: #fff !important;
-  border-color: #fff !important;
+  color: var(--hc-text) !important;
+  border-color: var(--hc-border) !important;
+  border-width: 2px !important;
 }
 
 /* Strong focus in HC */
 html.hc :focus-visible {
-  outline: 3px solid #ffffff !important;
+  outline: 4px solid var(--hc-border) !important;
   outline-offset: 2px !important;
 }
 
