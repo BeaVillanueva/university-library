@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { announcePageLoad, announceAction, announceLoading } from "../hooks/useVoiceGuide";
 import { apiListActivityLogs } from "../api/activityLogs";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
@@ -43,7 +44,6 @@ function formatYearSuffix(n) {
 function formatDescription(action, details) {
   if (!details || typeof details !== "object") return "";
 
-  // Auth
   if (action === "auth.login_success") {
     return `Logged in as ${details.role || "user"} (${details.email || "—"})`;
   }
@@ -54,7 +54,6 @@ function formatDescription(action, details) {
     return `Logged out (${details.email || "—"})`;
   }
 
-  // Borrow
   if (action === "borrow.borrow") {
     const book = details.book_title || details.book_id || "a book";
     const due = details.due_date ? ` (Due: ${details.due_date})` : "";
@@ -67,7 +66,6 @@ function formatDescription(action, details) {
     return `Returned ${book}${who ? ` from ${who}` : ""}`;
   }
 
-  // Users (now includes department/year/student number if present)
   if (action === "users.create" || action === "users.update" || action === "users.delete") {
     const target =
       details.target_name ||
@@ -99,14 +97,11 @@ function formatDescription(action, details) {
     return `${verb}: ${target}${role}${extra}`;
   }
 
-  // Generic fallback: turn details into short sentence
   const entries = Object.entries(details)
     .slice(0, 4)
     .map(([k, v]) => `${k}: ${String(v)}`);
   return entries.join(" • ");
 }
-
-
 
 export default function ActivityLogsPage() {
   const [items, setItems] = useState([]);
@@ -123,11 +118,17 @@ export default function ActivityLogsPage() {
 
   const rows = useMemo(() => items || [], [items]);
 
+  // ✅ Announce page load
+  useEffect(() => {
+    announcePageLoad("ACTIVITY_LOGS");
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError("");
+      announceLoading("activity logs");
       try {
         const res = await apiListActivityLogs({
           page,
@@ -167,6 +168,7 @@ export default function ActivityLogsPage() {
               onChange={(e) => {
                 setPage(1);
                 setQ(e.target.value);
+                announceAction("SEARCH_PERFORMED", "activity logs");
               }}
               placeholder="name/email/action"
             />
@@ -180,6 +182,7 @@ export default function ActivityLogsPage() {
               onChange={(e) => {
                 setPage(1);
                 setAction(e.target.value);
+                announceAction("FILTER_APPLIED", "by action");
               }}
               placeholder="e.g. users.create"
             />
@@ -193,6 +196,7 @@ export default function ActivityLogsPage() {
               onChange={(e) => {
                 setPage(1);
                 setEntityType(e.target.value);
+                announceAction("FILTER_APPLIED", "by entity type");
               }}
               placeholder="e.g. user, borrow, book"
             />
@@ -250,7 +254,14 @@ export default function ActivityLogsPage() {
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          <Pagination 
+            page={page} 
+            totalPages={totalPages} 
+            onPageChange={(newPage) => {
+              setPage(newPage);
+              announceAction("PAGE_CHANGED", `${newPage}`);
+            }} 
+          />
         </div>
       </div>
     </div>

@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { announcePageLoad, announceLoading } from "../hooks/useVoiceGuide";
 import { apiMyBorrowHistory } from "../api/borrow";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 
-
-
-const API_BASE_URL = "http://localhost:8000"; // Change to your backend URL
+const API_BASE_URL = "http://localhost:8000";
 
 export default function MyBorrowsPage() {
   const [items, setItems] = useState([]);
@@ -14,11 +13,17 @@ export default function MyBorrowsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // ✅ Announce page load
+  useEffect(() => {
+    announcePageLoad("MY_BORROWS");
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError("");
+      announceLoading("your borrowing history");
       try {
         const res = await apiMyBorrowHistory({ page, limit: 12 });
         if (!cancelled) {
@@ -37,7 +42,6 @@ export default function MyBorrowsPage() {
     };
   }, [page]);
 
-  // Separate active and returned
   const activeBorrows = useMemo(
     () => items.filter((r) => ["pending", "borrowed", "overdue"].includes(String(r.status || "").toLowerCase())),
     [items]
@@ -65,7 +69,6 @@ export default function MyBorrowsPage() {
         </div>
       ) : null}
 
-      {/* Active Borrows Section */}
       {loading ? (
         <div className="mt-6 text-sm text-slate-600 a11y-muted">Loading…</div>
       ) : (
@@ -114,7 +117,6 @@ export default function MyBorrowsPage() {
         </>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 ? (
         <div className="mt-6">
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
@@ -140,7 +142,6 @@ function BorrowCard({ record, isActive }) {
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
-  // ✅ Construct full image URL
   const imageUrl = record.cover_image_url
     ? record.cover_image_url.startsWith("http")
       ? record.cover_image_url
@@ -149,7 +150,6 @@ function BorrowCard({ record, isActive }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-      {/* Cover Image */}
       <div className="mb-3 aspect-[3/4] w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
         {imageUrl ? (
           <img
@@ -171,7 +171,6 @@ function BorrowCard({ record, isActive }) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="space-y-2">
         <div>
           <h3 className="font-semibold text-slate-800 line-clamp-2">{record.title}</h3>
@@ -180,7 +179,6 @@ function BorrowCard({ record, isActive }) {
           )}
         </div>
 
-        {/* Status */}
         <div className="flex gap-2 items-center">
           <span
             className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${statusColor}`}
@@ -189,7 +187,6 @@ function BorrowCard({ record, isActive }) {
           </span>
         </div>
 
-        {/* Dates */}
         <div className="space-y-1 text-xs text-slate-600">
           {record.borrow_date && (
             <div className="flex justify-between">
@@ -216,7 +213,6 @@ function BorrowCard({ record, isActive }) {
           )}
         </div>
 
-        {/* ISBN */}
         {record.isbn && (
           <div className="pt-2 border-t border-slate-100">
             <p className="text-xs text-slate-500">

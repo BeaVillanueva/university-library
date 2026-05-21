@@ -7,9 +7,9 @@ import { loadA11yPrefs } from '../state/a11yPrefs';
  */
 export function useVoiceGuide() {
   const speak = useCallback((text, options = {}) => {
-    // Check kung enabled ang voice reader
+    // Check kung enabled ang voice reader - ALWAYS CHECK CURRENT STATE
     const prefs = loadA11yPrefs();
-    if (!prefs.voiceReader || !text) return;
+    if (!prefs?.voiceReader || !text) return;
 
     // Stop any ongoing speech
     if (window.speechSynthesis?.speaking) {
@@ -29,11 +29,37 @@ export function useVoiceGuide() {
 }
 
 /**
+ * Helper function to check if voice reader is enabled
+ */
+function isVoiceReaderEnabled() {
+  const prefs = loadA11yPrefs();
+  return prefs?.voiceReader === true;
+}
+
+/**
+ * Helper function to speak text if voice reader enabled
+ */
+function speak(text, options = {}) {
+  if (!isVoiceReaderEnabled() || !text) return;
+
+  if (window.speechSynthesis?.speaking) {
+    window.speechSynthesis.cancel();
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = options.rate || 1;
+  utterance.pitch = options.pitch || 1;
+  utterance.volume = options.volume || 1;
+  utterance.lang = options.lang || 'en-US';
+
+  window.speechSynthesis?.speak(utterance);
+}
+
+/**
  * Announce sa page load
  */
 export function announcePageLoad(pageName) {
-  const prefs = loadA11yPrefs();
-  if (!prefs.voiceReader) return;
+  if (!isVoiceReaderEnabled()) return;
 
   const messages = {
     DASHBOARD: "Welcome to the dashboard page. You can view your library statistics and recent activity.",
@@ -47,17 +73,14 @@ export function announcePageLoad(pageName) {
   };
 
   const text = messages[pageName] || `You are on the ${pageName} page.`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  window.speechSynthesis?.speak(utterance);
+  speak(text);
 }
 
 /**
  * Announce user actions
  */
 export function announceAction(action, details = "") {
-  const prefs = loadA11yPrefs();
-  if (!prefs.voiceReader) return;
+  if (!isVoiceReaderEnabled()) return;
 
   const messages = {
     USER_CREATED: `User ${details} has been created successfully.`,
@@ -67,10 +90,10 @@ export function announceAction(action, details = "") {
     BOOK_RETURNED: `Book ${details} has been returned successfully.`,
     BOOK_CREATED: `New book ${details} has been added to the library.`,
     BOOK_UPDATED: `Book ${details} has been updated.`,
-    FILTER_APPLIED: `Filter applied. Results are now displayed.`,
+    FILTER_APPLIED: `Filter applied. ${details || 'Results are now displayed.'}`,
     SEARCH_PERFORMED: `Search completed. ${details} results found.`,
     SORT_APPLIED: `Results sorted by ${details}.`,
-    PAGE_CHANGED: `Showing page ${details}.`,
+    PAGE_CHANGED: `${details}`,
     LOGOUT: "You have been logged out successfully.",
     LOGIN: `Welcome ${details}. You have logged in successfully.`,
     ERROR: `An error occurred: ${details}`,
@@ -81,36 +104,43 @@ export function announceAction(action, details = "") {
   const text = messages[action] || details;
   if (!text) return;
 
-  if (window.speechSynthesis?.speaking) {
-    window.speechSynthesis.cancel();
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  window.speechSynthesis?.speak(utterance);
+  speak(text);
 }
 
 /**
  * Announce form field focus
  */
 export function announceFormField(fieldLabel, helpText = "") {
-  const prefs = loadA11yPrefs();
-  if (!prefs.voiceReader) return;
+  if (!isVoiceReaderEnabled()) return;
 
   const text = helpText ? `${fieldLabel}. ${helpText}` : `${fieldLabel} field. Please enter the required information.`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  window.speechSynthesis?.speak(utterance);
+  speak(text);
 }
 
 /**
  * Announce loading state
  */
 export function announceLoading(what = "data") {
-  const prefs = loadA11yPrefs();
-  if (!prefs.voiceReader) return;
+  if (!isVoiceReaderEnabled()) return;
 
-  const utterance = new SpeechSynthesisUtterance(`Loading ${what}. Please wait.`);
-  utterance.rate = 1;
-  window.speechSynthesis?.speak(utterance);
+  const text = `Loading ${what}. Please wait.`;
+  speak(text);
+}
+
+/**
+ * Announce success message
+ */
+export function announceSuccess(message) {
+  if (!isVoiceReaderEnabled()) return;
+
+  speak(`Success. ${message}`);
+}
+
+/**
+ * Announce error message
+ */
+export function announceError(message) {
+  if (!isVoiceReaderEnabled()) return;
+
+  speak(`Error. ${message}`);
 }

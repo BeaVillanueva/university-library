@@ -7,6 +7,7 @@ import { useAuth } from "../state/AuthContext";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 import TextToSpeechButton from "../components/TextToSpeechButton";
+import { announcePageLoad, announceAction, announceLoading } from "../hooks/useVoiceGuide";
 
 const API_BASE_URL = "http://localhost:8000";
 
@@ -56,6 +57,11 @@ export default function BooksPage() {
 
   const queueFull = canBorrow && myActive.length >= MAX_ACTIVE;
 
+  // ✅ Announce page load on mount
+  useEffect(() => {
+    announcePageLoad("BOOKS");
+  }, []);
+
   async function refreshBooks() {
     const res = await apiListBooks({
       page,
@@ -71,11 +77,14 @@ export default function BooksPage() {
   async function loadMyBorrows() {
     if (!canBorrow) return;
     setMyBorrowsLoading(true);
+    announceLoading("your borrows");
     try {
       const res = await apiMyBorrowHistory({ page: 1, limit: 50 });
       setMyBorrows(res?.items || []);
+      announceAction("SUCCESS", "Borrows loaded successfully");
     } catch {
       setMyBorrows([]);
+      announceAction("ERROR", "Failed to load borrows");
     } finally {
       setMyBorrowsLoading(false);
     }
@@ -108,6 +117,7 @@ export default function BooksPage() {
       setLoading(true);
       setError("");
       setNotice("");
+      announceLoading("books");
       try {
         const res = await apiListBooks({
           page,
@@ -119,9 +129,16 @@ export default function BooksPage() {
         if (!cancelled) {
           setItems(res.items || []);
           setTotalPages(res.total_pages || 1);
+          if (q || categoryId || availability) {
+            announceAction("SEARCH_PERFORMED", `Found ${res.items?.length || 0} books`);
+          }
         }
       } catch (e) {
-        if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load books");
+        if (!cancelled) {
+          const errorMsg = e?.response?.data?.error || e?.message || "Failed to load books";
+          setError(errorMsg);
+          announceAction("ERROR", errorMsg);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -136,12 +153,15 @@ export default function BooksPage() {
     if (!canBorrow) return;
 
     if (queueFull) {
-      setError(`You can only have up to ${MAX_ACTIVE} active requests/borrows. Remove one first.`);
+      const msg = `You can only have up to ${MAX_ACTIVE} active requests/borrows. Remove one first.`;
+      setError(msg);
+      announceAction("ERROR", msg);
       return;
     }
 
     setNotice("");
     setError("");
+    announceLoading("book borrow request");
     try {
       const res = await apiBorrowBook(bookId);
 
@@ -150,6 +170,7 @@ export default function BooksPage() {
       const status = res?.status ? ` (${String(res.status).toUpperCase()})` : "";
 
       setNotice(`${msg}${status}.${due}`);
+      announceAction("BOOK_BORROWED", `Book has been borrowed successfully.${due}`);
 
       await refreshBooks();
       await loadMyBorrows();
@@ -157,9 +178,12 @@ export default function BooksPage() {
       const data = e?.response?.data;
       const msg = data?.error || e?.message || "Borrow failed";
       if (msg === "Borrow limit reached") {
-        setError(`Borrow limit reached. Maximum active borrows: ${data?.max_active ?? 3}.`);
+        const errMsg = `Borrow limit reached. Maximum active borrows: ${data?.max_active ?? 3}.`;
+        setError(errMsg);
+        announceAction("ERROR", errMsg);
       } else {
         setError(msg);
+        announceAction("ERROR", msg);
       }
     }
   }
@@ -169,13 +193,17 @@ export default function BooksPage() {
 
     setError("");
     setNotice("");
+    announceLoading("cancellation request");
 
     try {
       await apiCancelBorrow(recordId);
       setNotice("Pending request cancelled.");
+      announceAction("SUCCESS", "Pending request cancelled successfully");
       await loadMyBorrows();
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Cancel failed.");
+      const msg = e?.response?.data?.error || e?.message || "Cancel failed.";
+      setError(msg);
+      announceAction("ERROR", msg);
     }
   }
 
@@ -186,17 +214,22 @@ export default function BooksPage() {
     const qty = Number(raw);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError("Invalid quantity.");
+      announceAction("ERROR", "Invalid quantity. Please enter a number greater than zero.");
       return;
     }
 
     setError("");
     setNotice("");
+    announceLoading("stock addition");
     try {
       await apiAddBookStock(bookId, Math.trunc(qty));
       setNotice("Stock added successfully.");
+      announceAction("SUCCESS", `${qty} copies added to stock successfully`);
       await refreshBooks();
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Failed to add stock");
+      const msg = e?.response?.data?.error || e?.message || "Failed to add stock";
+      setError(msg);
+      announceAction("ERROR", msg);
     }
   }
 
@@ -205,6 +238,7 @@ export default function BooksPage() {
     setQ("");
     setCategoryId("");
     setAvailability("");
+    announceAction("SUCCESS", "Filters have been reset");
   }
 
   function coverSrc(book) {
@@ -307,6 +341,7 @@ export default function BooksPage() {
                 setPage(1);
                 setQ(e.target.value);
               }}
+              onFocus={() => announceAction("INFO", "Search field focused. Enter book title, author, or ISBN")}
               placeholder="Title / Author / ISBN"
               aria-label="Search books"
             />
@@ -323,6 +358,9 @@ export default function BooksPage() {
               onChange={(e) => {
                 setPage(1);
                 setCategoryId(e.target.value);
+                if (e.target.value) {
+                  announceAction("FILTER_APPLIED", `Filtered by category`);
+                }
               }}
               aria-label="Filter by category"
             >
@@ -346,6 +384,9 @@ export default function BooksPage() {
               onChange={(e) => {
                 setPage(1);
                 setAvailability(e.target.value);
+                if (e.target.value) {
+                  announceAction("FILTER_APPLIED", `Filtered by ${e.target.value} books`);
+                }
               }}
               aria-label="Filter by availability"
             >
@@ -487,7 +528,10 @@ export default function BooksPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="mt-6">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+              <Pagination page={page} totalPages={totalPages} onPageChange={(newPage) => {
+                setPage(newPage);
+                announceAction("PAGE_CHANGED", `Now showing page ${newPage}`);
+              }} />
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../state/AuthContext";
+import { announcePageLoad, announceLoading } from "../hooks/useVoiceGuide";
 import {
   apiReportsSummary,
   apiReportsMySummary,
@@ -42,13 +43,19 @@ export default function DashboardPage() {
 
   const role = user?.role || "";
   const isStudent = useMemo(() => role === "student", [role]);
-  const canSeeGlobalStats = !isStudent; // admin/librarian
+  const canSeeGlobalStats = !isStudent;
+
+  // ✅ Announce page load
+  useEffect(() => {
+    announcePageLoad("DASHBOARD");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       setError("");
+      announceLoading("dashboard data");
       try {
         const kpiPromise = isStudent ? apiReportsMySummary() : apiReportsSummary();
         const distPromise = isStudent ? Promise.resolve(null) : apiReportsDistribution();
@@ -85,7 +92,6 @@ export default function DashboardPage() {
     };
   }, [isStudent, canSeeGlobalStats]);
 
-    // KPI cards
   const cards = isStudent
     ? [
         { title: "Total borrowed", value: kpis?.my_total_borrowed ?? "—", tone: "bg-sky-50" },
@@ -94,20 +100,17 @@ export default function DashboardPage() {
         { title: "Returned (total)", value: kpis?.my_returned_total ?? "—", tone: "bg-amber-50" }
       ]
     : [
-        // ✅ TOTAL STUDENTS FIRST
         {
           title: "Total students",
           value: studentStats?.total_students_approved ?? "—",
           tone: "bg-violet-50"
         },
-        // ✅ then TOTAL BOOKS
         { title: "Total books", value: kpis?.total_books ?? "—", tone: "bg-sky-50" },
         { title: "Available copies", value: kpis?.available_copies ?? "—", tone: "bg-emerald-50" },
         { title: "Borrowed (active)", value: kpis?.borrowed_active ?? "—", tone: "bg-amber-50" },
         { title: "Overdue (active)", value: kpis?.overdue_active ?? "—", tone: "bg-rose-50" }
       ];
 
-  // Charts data (existing)
   const pieData = isStudent
     ? {
         labels: ["Borrowed (active)", "Overdue (active)", "Returned (total)"],
@@ -161,7 +164,6 @@ export default function DashboardPage() {
     }
   };
 
-  // NEW: Students per course chart (Top 10)
   const topCourses = (studentStats?.students_by_course || []).slice(0, 10);
   const courseBarData = {
     labels: topCourses.map((x) => x.department),
@@ -222,7 +224,6 @@ export default function DashboardPage() {
             </Panel>
           </div>
 
-          {/* NEW panel: students per course (admin/librarian only) */}
           {canSeeGlobalStats ? (
             <div className="mt-6">
               <Panel title="Students per Course (Top 10)">
