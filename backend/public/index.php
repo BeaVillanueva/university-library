@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // ---- CORS quick-guard (must run before any output) ----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowed = ['http://localhost:5173', 'http://YOUR_IP:5173'];
+$allowed = ['http://localhost:5173', 'http://192.168.1.5:5173', 'http://YOUR_IP:5173'];
 
 if ($origin && in_array($origin, $allowed, true)) {
   header("Access-Control-Allow-Origin: {$origin}");
@@ -96,6 +96,11 @@ if ($basePath && str_starts_with($path, $basePath)) {
 // ✅ support calling via /index.php/route
 if (str_starts_with($path, '/index.php')) {
   $path = substr($path, strlen('/index.php')) ?: '/';
+}
+
+// ✅ STRIP /api prefix if present
+if (str_starts_with($path, '/api')) {
+  $path = substr($path, 4) ?: '/';
 }
 
 /**
