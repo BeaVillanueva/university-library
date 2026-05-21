@@ -33,17 +33,19 @@ const TABS = {
   create: "Create"
 };
 
+// ✅ FIXED: Add /app prefix
 function tabFromPath(pathname) {
-  if (pathname.startsWith("/admin/users/pending")) return "pending";
-  if (pathname.startsWith("/admin/users/create")) return "create";
-  if (pathname.startsWith("/admin/users")) return "all";
+  if (pathname.startsWith("/app/admin/users/pending")) return "pending";
+  if (pathname.startsWith("/app/admin/users/create")) return "create";
+  if (pathname.startsWith("/app/admin/users")) return "all";
   return "all";
 }
 
+// ✅ FIXED: Add /app prefix
 function pathFromTab(tab) {
-  if (tab === "pending") return "/admin/users/pending";
-  if (tab === "create") return "/admin/users/create";
-  return "/admin/users";
+  if (tab === "pending") return "/app/admin/users/pending";
+  if (tab === "create") return "/app/admin/users/create";
+  return "/app/admin/users";
 }
 
 export default function AdminUsersPage() {
@@ -151,7 +153,7 @@ export default function AdminUsersPage() {
         department: ""
       });
 
-      nav("/admin/users", { replace: true });
+      nav("/app/admin/users", { replace: true });
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Create failed");
     }
