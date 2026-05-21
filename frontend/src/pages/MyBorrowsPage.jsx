@@ -4,14 +4,29 @@ import { apiMyBorrowHistory } from "../api/borrow";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 
-const API_BASE_URL = "http://localhost:8000";
-
 export default function MyBorrowsPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // ✅ Get dynamic API base URL
+  const getApiBase = () => {
+    const fromLs = localStorage.getItem("ulms_api_base_url");
+    if (fromLs && fromLs.startsWith("http")) {
+      // Remove the /index.php part to get just the base
+      return fromLs.replace(/\/index\.php\/?$/, "");
+    }
+    
+    // Auto-detect from current host
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = window.location.port ? `:${window.location.port}` : "";
+    return `${protocol}//${host}${port}`;
+  };
+
+  const API_BASE_URL = getApiBase();
 
   // ✅ Announce page load
   useEffect(() => {
@@ -84,7 +99,7 @@ export default function MyBorrowsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {activeBorrows.map((r) => (
-                  <BorrowCard key={r.id} record={r} isActive />
+                  <BorrowCard key={r.id} record={r} isActive apiBase={API_BASE_URL} />
                 ))}
               </div>
             </div>
@@ -101,7 +116,7 @@ export default function MyBorrowsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {returnedBorrows.map((r) => (
-                  <BorrowCard key={r.id} record={r} isActive={false} />
+                  <BorrowCard key={r.id} record={r} isActive={false} apiBase={API_BASE_URL} />
                 ))}
               </div>
             </div>
@@ -126,7 +141,7 @@ export default function MyBorrowsPage() {
   );
 }
 
-function BorrowCard({ record, isActive }) {
+function BorrowCard({ record, isActive, apiBase }) {
   const statusColor =
     record.status === "overdue"
       ? "bg-red-50 text-red-700 border-red-200"
@@ -142,10 +157,11 @@ function BorrowCard({ record, isActive }) {
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
+  // ✅ FIXED: Use dynamic apiBase instead of hard-coded localhost
   const imageUrl = record.cover_image_url
     ? record.cover_image_url.startsWith("http")
       ? record.cover_image_url
-      : `${API_BASE_URL}${record.cover_image_url}`
+      : `${apiBase}${record.cover_image_url}`
     : null;
 
   return (
