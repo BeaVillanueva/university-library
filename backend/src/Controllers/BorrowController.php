@@ -536,7 +536,7 @@ final class BorrowController {
   }
 
   /**
-   * Student history ONLY (their own)
+   * ✅ Student history ONLY (their own) - NOW INCLUDES COVER IMAGE
    */
   public static function myHistory(PDO $pdo, array $auth): void {
     OverdueService::refresh($pdo);
@@ -553,7 +553,7 @@ final class BorrowController {
     $total = (int)($countStmt->fetch()['c'] ?? 0);
 
     $stmt = $pdo->prepare("
-      SELECT br.*, b.title, b.author, b.isbn
+      SELECT br.*, b.title, b.author, b.isbn, b.cover_image_url
       FROM borrow_records br
       JOIN books b ON b.id = br.book_id
       WHERE br.user_id = ?

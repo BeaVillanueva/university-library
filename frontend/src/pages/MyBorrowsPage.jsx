@@ -3,6 +3,8 @@ import { apiMyBorrowHistory } from "../api/borrow";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 
+const API_BASE_URL = "http://localhost:8000"; // Change to your backend URL
+
 export default function MyBorrowsPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -136,22 +138,35 @@ function BorrowCard({ record, isActive }) {
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
+  // ✅ Construct full image URL
+  const imageUrl = record.cover_image_url
+    ? record.cover_image_url.startsWith("http")
+      ? record.cover_image_url
+      : `${API_BASE_URL}${record.cover_image_url}`
+    : null;
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
       {/* Cover Image */}
-      <div className="mb-3 aspect-[3/4] w-full overflow-hidden rounded-xl bg-slate-100 flex items-center justify-center">
-        {record.cover_image_url ? (
+      <div className="mb-3 aspect-[3/4] w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+        {imageUrl ? (
           <img
-            src={record.cover_image_url}
+            src={imageUrl}
             alt={record.title}
             className="h-full w-full object-cover"
+            onError={(e) => {
+              e.target.style.display = "none";
+              e.target.nextElementSibling.style.display = "flex";
+            }}
           />
-        ) : (
-          <div className="flex flex-col items-center justify-center text-slate-400">
-            <span className="text-3xl">📖</span>
-            <span className="text-xs mt-1">No Cover</span>
-          </div>
-        )}
+        ) : null}
+        <div
+          className="flex flex-col items-center justify-center text-slate-400 text-center p-4"
+          style={{ display: imageUrl ? "none" : "flex" }}
+        >
+          <span className="text-4xl">📖</span>
+          <span className="text-xs mt-2 font-medium">No Cover</span>
+        </div>
       </div>
 
       {/* Content */}
