@@ -24,6 +24,7 @@ export default function BooksPage() {
   // ✅ IMPORTANT:
   // Your API base is usually ".../public/index.php"
   // But static files (covers) are served from ".../public" (WITHOUT index.php)
+  // ✅ IMPORTANT: Your API base setup
   const API_BASE =
     localStorage.getItem("ulms_api_base_url") ||
     import.meta.env.VITE_API_BASE_URL ||
@@ -327,7 +328,7 @@ export default function BooksPage() {
                       className="rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition overflow-hidden"
                     >
                       {/* Book Cover */}
-                      <div className="h-40 bg-slate-100 flex items-center justify-center overflow-hidden">
+                      <div className="h-64 bg-slate-100 flex items-center justify-center overflow-hidden">
                         {coverUrl ? (
                           <img
                             src={coverUrl}
