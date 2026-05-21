@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 // ---- CORS quick-guard (must run before any output) ----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-// ✅ Allow BOTH localhost AND IP for development
+// ✅ Allow frontend to call backend API
 $allowed = [
   'http://localhost:5173',
   'http://localhost:8000',
   'http://192.168.1.5:5173',
-  'http://192.168.1.5:8000'
+  'http://192.168.1.5:8000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:8000'
 ];
 
 if ($origin && in_array($origin, $allowed, true)) {

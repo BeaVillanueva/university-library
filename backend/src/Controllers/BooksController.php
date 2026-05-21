@@ -320,7 +320,7 @@ final class BooksController {
     // Update database
     $coverUrl = '/covers/' . $newFileName;
     $upd = $pdo->prepare("UPDATE books SET cover_image_url = ? WHERE id = ?");
-    $upd->execute([$coverUrl, $id]);
+    $upd->execute([$coverUrl, $id]);  // ✅ Must use $id parameter, not book ID
 
     // Log activity
     ActivityLogger::log($pdo, [
