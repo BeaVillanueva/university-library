@@ -3,7 +3,13 @@ declare(strict_types=1);
 
 // ---- CORS quick-guard (must run before any output) ----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowed = ['http://localhost:5173', 'http://192.168.1.5:5173'];
+// ✅ Allow BOTH localhost AND IP for development
+$allowed = [
+  'http://localhost:5173',
+  'http://localhost:8000',
+  'http://192.168.1.5:5173',
+  'http://192.168.1.5:8000'
+];
 
 if ($origin && in_array($origin, $allowed, true)) {
   header("Access-Control-Allow-Origin: {$origin}");

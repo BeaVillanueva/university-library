@@ -6,8 +6,9 @@ function getBaseUrl() {
   const fromLs = localStorage.getItem(LS_API_BASE);
   if (fromLs && fromLs.startsWith("http")) return fromLs;
 
-  // ✅ AUTO-DETECT: Use current hostname (IP or localhost) with backend path
-  const host = window.location.hostname;
+  // ✅ FIX: Use localhost if development, otherwise use current hostname
+  const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const host = isDev ? "localhost" : window.location.hostname;
   const protocol = window.location.protocol;
   
   const defaultUrl = `${protocol}//${host}:8000/university-library/backend/public/index.php`;
@@ -52,6 +53,17 @@ http.interceptors.response.use(
   (res) => res,
   (error) => {
     const status = error?.response?.status;
+
+    // ✅ Network error handler
+    if (!error.response) {
+      console.error("[HTTP] Network error:", error.message);
+      // Return error so pages can show retry buttons
+      return Promise.reject({
+        ...error,
+        isNetworkError: true,
+        message: "Network error. Please check your connection and try again."
+      });
+    }
 
     if (status === 401) {
       localStorage.removeItem("ulms_token");

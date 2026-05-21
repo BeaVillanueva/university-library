@@ -246,7 +246,20 @@ export default function LoginPage() {
                     role="alert"
                     aria-live="polite"
                   >
-                    {error}
+                    <div>{error}</div>
+                    {error.includes("Network") && (
+                      <div className="text-xs text-white/80 mt-2">
+                        <p>✓ Backend server running at :8000?</p>
+                        <p>✓ Check browser console for more details</p>
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="text-white/90 hover:underline mt-1"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : null}
 

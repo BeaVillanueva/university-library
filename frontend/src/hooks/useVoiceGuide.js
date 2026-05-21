@@ -1,39 +1,26 @@
-import { useEffect, useCallback } from 'react';
-import { loadA11yPrefs } from '../state/a11yPrefs';
+import { loadA11yPrefs, makeA11yStorageKey } from '../state/a11yPrefs';
+import { useAuth } from '../state/AuthContext';
 
 /**
- * Custom hook para sa voice guidance
- * Automatically checks kung enabled ang voice reader at nagsasalita
- */
-export function useVoiceGuide() {
-  const speak = useCallback((text, options = {}) => {
-    // Check kung enabled ang voice reader - ALWAYS CHECK CURRENT STATE
-    const prefs = loadA11yPrefs();
-    if (!prefs?.voiceReader || !text) return;
-
-    // Stop any ongoing speech
-    if (window.speechSynthesis?.speaking) {
-      window.speechSynthesis.cancel();
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = options.rate || 1;
-    utterance.pitch = options.pitch || 1;
-    utterance.volume = options.volume || 1;
-    utterance.lang = options.lang || 'en-US';
-
-    window.speechSynthesis?.speak(utterance);
-  }, []);
-
-  return { speak };
-}
-
-/**
- * Helper function to check if voice reader is enabled
+ * Helper function to get current user's voice reader setting
  */
 function isVoiceReaderEnabled() {
-  const prefs = loadA11yPrefs();
-  return prefs?.voiceReader === true;
+  // ✅ CHECK THE GLOBAL FLAG FIRST (set by a11yPrefs.js)
+  if (window.__voiceReaderEnabled === true) {
+    return true;
+  }
+  
+  // ✅ FALLBACK: Load from localStorage with proper user key
+  try {
+    const userEmail = localStorage.getItem('ulms_user')
+      ? JSON.parse(localStorage.getItem('ulms_user'))?.email || 'guest'
+      : 'guest';
+    
+    const prefs = loadA11yPrefs(userEmail);
+    return prefs?.voiceReader === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -42,6 +29,7 @@ function isVoiceReaderEnabled() {
 function speak(text, options = {}) {
   if (!isVoiceReaderEnabled() || !text) return;
 
+  // Stop any ongoing speech
   if (window.speechSynthesis?.speaking) {
     window.speechSynthesis.cancel();
   }
@@ -93,7 +81,7 @@ export function announceAction(action, details = "") {
     FILTER_APPLIED: `Filter applied. ${details || 'Results are now displayed.'}`,
     SEARCH_PERFORMED: `Search completed. ${details} results found.`,
     SORT_APPLIED: `Results sorted by ${details}.`,
-    PAGE_CHANGED: `${details}`,
+    PAGE_CHANGED: `Page ${details}.`,
     LOGOUT: "You have been logged out successfully.",
     LOGIN: `Welcome ${details}. You have logged in successfully.`,
     ERROR: `An error occurred: ${details}`,
@@ -143,4 +131,11 @@ export function announceError(message) {
   if (!isVoiceReaderEnabled()) return;
 
   speak(`Error. ${message}`);
+}
+
+/**
+ * Test voice reader
+ */
+export function testVoiceReader() {
+  speak("Voice reader test. This is a test announcement.");
 }

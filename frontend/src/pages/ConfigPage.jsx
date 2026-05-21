@@ -7,13 +7,14 @@ export default function ConfigPage() {
   const [apiUrl, setApiUrl] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("ulms_api_base_url");
     if (stored) setApiUrl(stored);
   }, []);
 
-  function handleSave() {
+  async function handleSave() {
     if (!apiUrl.trim()) {
       setError("Please enter an API URL");
       return;
@@ -24,7 +25,27 @@ export default function ConfigPage() {
       return;
     }
 
+    setLoading(true);
     setError("");
+    
+    // ✅ Test if backend is reachable
+    try {
+      const response = await fetch(apiUrl.replace("/index.php", "/health"), { 
+        timeout: 5000,
+        signal: AbortSignal.timeout(5000)
+      });
+      if (!response.ok) {
+        setError("⚠️ Backend server not responding. Check your URL.");
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      setError("❌ Cannot reach backend. Is the server running?");
+      console.error("Backend test failed:", e);
+      setLoading(false);
+      return;
+    }
+
     setApiBaseUrl(apiUrl.trim());
     setSaved(true);
     setTimeout(() => nav("/login"), 1500);
@@ -62,11 +83,12 @@ export default function ConfigPage() {
                 type="text"
                 value={apiUrl}
                 onChange={(e) => setApiUrl(e.target.value)}
+                disabled={loading}
                 placeholder="http://192.168.1.X/university-library/backend/public/index.php"
-                className="w-full rounded-lg bg-white/10 border border-white/25 px-4 py-3 text-sm text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50"
+                className="w-full rounded-lg bg-white/10 border border-white/25 px-4 py-3 text-sm text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50 disabled:opacity-50"
               />
               <p className="text-xs text-white/60 mt-2">
-                💡 Replace X with your server's IP address last octet
+                💡 Replace X with your server's IP address
               </p>
             </div>
 
@@ -99,9 +121,10 @@ export default function ConfigPage() {
             {/* Save Button */}
             <button
               onClick={handleSave}
-              className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white hover:from-emerald-400 hover:to-green-600 transition shadow-lg disabled:opacity-60"
+              disabled={loading}
+              className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white hover:from-emerald-400 hover:to-green-600 transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              💾 Save Configuration & Continue
+              {loading ? "⏳ Testing connection..." : "💾 Save Configuration & Continue"}
             </button>
 
             {/* Reset Button */}
@@ -111,7 +134,8 @@ export default function ConfigPage() {
                 setApiUrl("");
                 setError("");
               }}
-              className="w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15 transition"
+              disabled={loading}
+              className="w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15 transition disabled:opacity-50"
             >
               🔄 Reset to Default
             </button>
@@ -122,7 +146,8 @@ export default function ConfigPage() {
         <div className="mt-6 text-center">
           <button
             onClick={() => nav("/login")}
-            className="text-xs text-white/70 hover:text-white transition"
+            disabled={loading}
+            className="text-xs text-white/70 hover:text-white transition disabled:opacity-50"
           >
             → Skip & Go to Login
           </button>

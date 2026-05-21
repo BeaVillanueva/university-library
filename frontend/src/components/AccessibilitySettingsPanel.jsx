@@ -33,18 +33,13 @@ function getUserKeyFromAuth(auth) {
 }
 
 function isLoggedInFromAuth(auth) {
-  // Try common auth shapes:
-  // - auth.token exists
-  // - auth.user exists
-  // Adjust later if your AuthContext uses different fields
   return Boolean(auth?.token || auth?.user || auth?.currentUser || auth?.authUser);
 }
 
-// ✅ Voice Reader Utility Function - Takes isEnabled as parameter
+// ✅ Voice Reader Utility Function
 function announceText(text, isEnabled = true) {
   if (!isEnabled) return;
 
-  // Stop any ongoing speech
   if (window.speechSynthesis?.speaking) {
     window.speechSynthesis.cancel();
   }
@@ -66,15 +61,11 @@ export default function AccessibilitySettingsPanel() {
     isLoggedIn ? loadA11yPrefs(userKey) : DEFAULT_A11Y
   );
 
-  // Apply prefs always; save only when logged in (per-account)
   useEffect(() => {
     applyA11yPrefs(prefs);
     if (isLoggedIn) saveA11yPrefs(prefs, userKey);
   }, [prefs, userKey, isLoggedIn]);
 
-  // When auth/user changes:
-  // - logged out => reset to default (login page stays normal)
-  // - logged in  => load that user's prefs
   useEffect(() => {
     const next = isLoggedIn ? loadA11yPrefs(userKey) : DEFAULT_A11Y;
     setPrefs(next);
@@ -86,18 +77,15 @@ export default function AccessibilitySettingsPanel() {
     [prefs]
   );
 
-  // ✅ Announce when Voice Reader is toggled - Pass the NEW state
   const handleVoiceReaderToggle = () => {
     const newValue = !prefs.voiceReader;
     
-    // Announce BEFORE updating state, using the NEW value
     if (newValue) {
       announceText("Voice reader enabled. The system will now read page announcements.", true);
     } else {
       announceText("Voice reader disabled.", true);
     }
     
-    // Then update the state
     setPrefs((p) => ({ ...p, voiceReader: newValue }));
   };
 
@@ -141,7 +129,10 @@ export default function AccessibilitySettingsPanel() {
               <button
                 key={t}
                 type="button"
-                onClick={() => setPrefs((p) => ({ ...p, theme: t }))}
+                onClick={() => {
+                  setPrefs((p) => ({ ...p, theme: t }));
+                  announceText(`Theme changed to ${t}.`, true);
+                }}
                 className={cx(
                   "rounded-lg px-3 py-2 text-sm font-medium border transition",
                   prefs.theme === t
@@ -169,12 +160,11 @@ export default function AccessibilitySettingsPanel() {
 
           <button
             type="button"
-            onClick={() =>
-              setPrefs((p) => ({
-                ...p,
-                contrast: p.contrast === "high" ? "normal" : "high"
-              }))
-            }
+            onClick={() => {
+              const newValue = prefs.contrast === "high" ? "normal" : "high";
+              setPrefs((p) => ({ ...p, contrast: newValue }));
+              announceText(newValue === "high" ? "High contrast enabled." : "High contrast disabled.", true);
+            }}
             className={cx(
               "relative inline-flex h-9 w-14 items-center rounded-full border transition",
               prefs.contrast === "high"
@@ -207,9 +197,11 @@ export default function AccessibilitySettingsPanel() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                setPrefs((p) => ({ ...p, fontSize: clampFontSize(p.fontSize, -1) }))
-              }
+              onClick={() => {
+                const newSize = clampFontSize(prefs.fontSize, -1);
+                setPrefs((p) => ({ ...p, fontSize: newSize }));
+                announceText(`Font size changed to ${newSize.toUpperCase()}.`, true);
+              }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-outline"
               aria-label="Decrease font size"
             >
@@ -222,9 +214,11 @@ export default function AccessibilitySettingsPanel() {
 
             <button
               type="button"
-              onClick={() =>
-                setPrefs((p) => ({ ...p, fontSize: clampFontSize(p.fontSize, +1) }))
-              }
+              onClick={() => {
+                const newSize = clampFontSize(prefs.fontSize, +1);
+                setPrefs((p) => ({ ...p, fontSize: newSize }));
+                announceText(`Font size changed to ${newSize.toUpperCase()}.`, true);
+              }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-outline"
               aria-label="Increase font size"
             >
@@ -244,7 +238,11 @@ export default function AccessibilitySettingsPanel() {
 
           <button
             type="button"
-            onClick={() => setPrefs((p) => ({ ...p, reduceMotion: !p.reduceMotion }))}
+            onClick={() => {
+              const newValue = !prefs.reduceMotion;
+              setPrefs((p) => ({ ...p, reduceMotion: newValue }));
+              announceText(newValue ? "Reduce motion enabled." : "Reduce motion disabled.", true);
+            }}
             className={cx(
               "relative inline-flex h-9 w-14 items-center rounded-full border transition",
               prefs.reduceMotion
@@ -276,7 +274,11 @@ export default function AccessibilitySettingsPanel() {
 
           <button
             type="button"
-            onClick={() => setPrefs((p) => ({ ...p, dyslexiaFont: !p.dyslexiaFont }))}
+            onClick={() => {
+              const newValue = !prefs.dyslexiaFont;
+              setPrefs((p) => ({ ...p, dyslexiaFont: newValue }));
+              announceText(newValue ? "Dyslexia friendly font enabled." : "Dyslexia friendly font disabled.", true);
+            }}
             className={cx(
               "relative inline-flex h-9 w-14 items-center rounded-full border transition",
               prefs.dyslexiaFont
