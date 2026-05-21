@@ -4,6 +4,8 @@ import { apiCreateBook, apiUploadBookCover } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import Alert from "../components/Alert";
 
+
+
 export default function BookCreatePage() {
   const nav = useNavigate();
 

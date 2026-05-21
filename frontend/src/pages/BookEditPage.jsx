@@ -4,6 +4,8 @@ import { apiGetBook, apiUpdateBook, apiUploadBookCover } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import Alert from "../components/Alert";
 
+
+
 export default function BookEditPage() {
   const { id } = useParams();
   const bookId = Number(id);
