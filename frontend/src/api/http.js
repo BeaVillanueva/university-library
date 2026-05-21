@@ -6,10 +6,13 @@ function getBaseUrl() {
   const fromLs = localStorage.getItem(LS_API_BASE);
   if (fromLs && fromLs.startsWith("http")) return fromLs;
 
-  return (
-    import.meta.env.VITE_API_BASE_URL ||
-    "http://192.168.1.5:8000"  // ✅ CHANGED: Use IP instead of localhost
-  );
+  // ✅ AUTO-DETECT: Use current hostname (IP or localhost) with backend path
+  const host = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  const defaultUrl = `${protocol}//${host}:8000/university-library/backend/public/index.php`;
+
+  return import.meta.env.VITE_API_BASE_URL || defaultUrl;
 }
 
 export function setApiBaseUrl(next) {

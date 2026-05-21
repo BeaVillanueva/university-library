@@ -3,7 +3,8 @@ export const DEFAULT_A11Y = {
   contrast: "normal", // normal | high
   fontSize: "md", // sm | md | lg | xl
   reduceMotion: false,
-  dyslexiaFont: false
+  dyslexiaFont: false,
+  voiceReader: false // ✅ NEW: Voice Reader feature
 };
 
 // NOTE: per-user key: ulms_a11y_prefs_v1::<userKey>
@@ -51,6 +52,9 @@ export function applyA11yPrefs(prefs) {
 
   root.classList.toggle("reduce-motion", Boolean(prefs.reduceMotion));
   root.classList.toggle("dyslexia-font", Boolean(prefs.dyslexiaFont));
+  
+  // ✅ Store voice reader preference globally for access
+  window.__voiceReaderEnabled = Boolean(prefs.voiceReader);
 }
 
 export function resetA11yPrefs() {

@@ -3,7 +3,9 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import { startIdleLogout } from "./utils/idleLogout.js";
 
+
 import LandingPage from "./pages/LandingPage.jsx";
+import ConfigPage from "./pages/ConfigPage.jsx";
 
 import LoginPage from "./pages/LoginPage.jsx";
 import RegisterStudentPage from "./pages/RegisterStudentPage.jsx";
@@ -44,6 +46,12 @@ export default function App() {
     <Routes>
       {/* Public: Landing (default page) */}
       <Route path="/" element={<LandingPage />} />
+
+      {/* Configuration page - for mobile/different devices */}
+      <Route path="/config" element={<ConfigPage />} />
+
+      {/* Public: Auth routes */}
+      <Route path="/login" element={<LoginPage />} />
 
       {/* Public: Auth routes */}
       <Route path="/login" element={<LoginPage />} />

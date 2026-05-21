@@ -6,6 +6,7 @@ import {
   saveA11yPrefs
 } from "../state/a11yPrefs";
 import { useAuth } from "../state/AuthContext";
+import { FiVolume2 } from "react-icons/fi";
 
 function cx(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -39,6 +40,22 @@ function isLoggedInFromAuth(auth) {
   return Boolean(auth?.token || auth?.user || auth?.currentUser || auth?.authUser);
 }
 
+// ✅ Voice Reader Utility Function - Takes isEnabled as parameter
+function announceText(text, isEnabled = true) {
+  if (!isEnabled) return;
+
+  // Stop any ongoing speech
+  if (window.speechSynthesis?.speaking) {
+    window.speechSynthesis.cancel();
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  window.speechSynthesis?.speak(utterance);
+}
+
 export default function AccessibilitySettingsPanel() {
   const auth = useAuth();
 
@@ -68,6 +85,21 @@ export default function AccessibilitySettingsPanel() {
     () => JSON.stringify(prefs) === JSON.stringify(DEFAULT_A11Y),
     [prefs]
   );
+
+  // ✅ Announce when Voice Reader is toggled - Pass the NEW state
+  const handleVoiceReaderToggle = () => {
+    const newValue = !prefs.voiceReader;
+    
+    // Announce BEFORE updating state, using the NEW value
+    if (newValue) {
+      announceText("Voice reader enabled. The system will now read page announcements.", true);
+    } else {
+      announceText("Voice reader disabled.", true);
+    }
+    
+    // Then update the state
+    setPrefs((p) => ({ ...p, voiceReader: newValue }));
+  };
 
   return (
     <section
@@ -178,7 +210,7 @@ export default function AccessibilitySettingsPanel() {
               onClick={() =>
                 setPrefs((p) => ({ ...p, fontSize: clampFontSize(p.fontSize, -1) }))
               }
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-surface a11y-outline"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-outline"
               aria-label="Decrease font size"
             >
               A−
@@ -193,7 +225,7 @@ export default function AccessibilitySettingsPanel() {
               onClick={() =>
                 setPrefs((p) => ({ ...p, fontSize: clampFontSize(p.fontSize, +1) }))
               }
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-surface a11y-outline"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 a11y-outline"
               aria-label="Increase font size"
             >
               A+
@@ -260,6 +292,41 @@ export default function AccessibilitySettingsPanel() {
               className={cx(
                 "inline-block h-7 w-7 transform rounded-full bg-white shadow transition",
                 prefs.dyslexiaFont ? "translate-x-6" : "translate-x-1"
+              )}
+            />
+          </button>
+        </div>
+
+        {/* ✅ Voice Reader */}
+        <div className="rounded-xl border border-slate-200 p-3 a11y-outline flex items-center justify-between gap-3 bg-gradient-to-r from-blue-50 to-transparent">
+          <div className="flex items-start gap-3">
+            <FiVolume2 className="mt-1 text-blue-600 flex-shrink-0" size={20} aria-hidden="true" />
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Voice Reader</div>
+              <div className="text-xs text-slate-600 a11y-muted">
+                The voice reader accurately announces the selected dashboard or feature.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleVoiceReaderToggle}
+            className={cx(
+              "relative inline-flex h-9 w-14 items-center rounded-full border transition flex-shrink-0",
+              prefs.voiceReader
+                ? "bg-emerald-600 border-emerald-600"
+                : "bg-slate-200 border-slate-200",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            )}
+            role="switch"
+            aria-checked={prefs.voiceReader}
+            aria-label="Toggle voice reader"
+          >
+            <span
+              className={cx(
+                "inline-block h-7 w-7 transform rounded-full bg-white shadow transition",
+                prefs.voiceReader ? "translate-x-6" : "translate-x-1"
               )}
             />
           </button>
