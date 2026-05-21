@@ -8,7 +8,7 @@ function getBaseUrl() {
 
   return (
     import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost/university-library/backend/public/index.php"
+    "http://192.168.1.5:8000"  // ✅ CHANGED: Use IP instead of localhost
   );
 }
 
