@@ -5,8 +5,6 @@ import { useUi } from "../state/UiContext";
 import { getDefaultRoute } from "../state/AuthContext";
 import { FiEye, FiEyeOff, FiMail, FiLock } from "react-icons/fi";
 
-
-
 function formatSeconds(sec) {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
@@ -21,20 +19,13 @@ export default function LoginPage() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  // ✅ FIX: Determine redirect route based on role
   const from = useMemo(() => {
-    // If user just logged in and has a role, use role-based default
     if (isAuthenticated && user) {
       return getDefaultRoute(user);
     }
-
-    // Otherwise, check if there's a "from" location stored
     const f = loc.state?.from;
-    // Support either string "/app/..." or location object { pathname: "/app/..." }
     if (typeof f === "string") return f;
     if (f && typeof f === "object" && typeof f.pathname === "string") return f.pathname;
-    
-    // Fallback to dashboard
     return "/app";
   }, [isAuthenticated, user, loc.state]);
 
@@ -43,7 +34,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  // lockout state (persisted, does NOT depend on error string)
   const [lockedUntilMs, setLockedUntilMs] = useState(null);
   const [nowMs, setNowMs] = useState(Date.now());
 
@@ -56,17 +46,26 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, user, nav, from]);
 
-  // countdown ticker
   useEffect(() => {
     if (!isLocked) return;
     const t = setInterval(() => setNowMs(Date.now()), 500);
     return () => clearInterval(t);
   }, [isLocked]);
 
+  // ✅ Clear error when user types
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value);
+    if (error && !isLocked) setError(""); // Clear error unless account is locked
+  };
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+    if (error && !isLocked) setError(""); // Clear error unless account is locked
+  };
+
   async function handleSubmit(e) {
     e.preventDefault();
 
-    // ✅ HARD BLOCK: never submit when locked
     if (isLocked) {
       setError(`Too many login attempts. Please wait ${formatSeconds(secondsLeft)}.`);
       return;
@@ -79,14 +78,12 @@ export default function LoginPage() {
     if (!res.ok) {
       const msg = String(res.error || "Login failed").trim();
 
-      // treat as locked if status=429 OR message contains the lock text
       const looksLocked =
         res.status === 429 ||
         msg.toLowerCase().includes("too many login attempts") ||
         msg.toLowerCase().includes("try again in about");
 
       if (looksLocked) {
-        // best: use backend locked_until if present
         const lockedUntilStr = res?.data?.locked_until;
         const minutesLeft = res?.data?.minutes_left;
 
@@ -96,7 +93,6 @@ export default function LoginPage() {
           if (!Number.isNaN(parsed)) until = parsed;
         }
 
-        // fallback: lock for 10 minutes (or backend minutes_left)
         if (!until) {
           const mins = Number.isFinite(Number(minutesLeft)) ? Number(minutesLeft) : 10;
           until = Date.now() + mins * 60 * 1000;
@@ -112,7 +108,6 @@ export default function LoginPage() {
       return;
     }
 
-    // success: clear lock state
     setLockedUntilMs(null);
   }
 
@@ -141,7 +136,6 @@ export default function LoginPage() {
               <form
                 className="mt-7 space-y-5"
                 onSubmit={handleSubmit}
-                // ✅ also block Enter key submit when locked
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && isLocked) {
                     e.preventDefault();
@@ -164,9 +158,9 @@ export default function LoginPage() {
                     />
                     <input
                       id="email"
-                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50 transition"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={handleEmailChange}
                       autoComplete="email"
                       required
                       aria-label="Email address"
@@ -190,9 +184,9 @@ export default function LoginPage() {
                     <input
                       id="password"
                       type={showPw ? "text" : "password"}
-                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50 transition"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-12 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-emerald-400/50"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={handlePasswordChange}
                       autoComplete="current-password"
                       required
                       aria-label="Password"
@@ -228,7 +222,7 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* LOCK BANNER */}
+                {/* ✅ LOCK BANNER - Only ONE */}
                 {lockedUntilMs && isLocked ? (
                   <div
                     className="rounded-lg border border-yellow-300/40 bg-yellow-500/20 px-4 py-3 text-sm text-white"
@@ -240,30 +234,7 @@ export default function LoginPage() {
                   </div>
                 ) : null}
 
-                {/* LOCK BANNER */}
-                {lockedUntilMs && isLocked ? (
-                  <div
-                    className="rounded-lg border border-yellow-300/40 bg-yellow-500/20 px-4 py-3 text-sm text-white"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    Too many login attempts. Please wait{" "}
-                    <b>{formatSeconds(secondsLeft)}</b> before trying again.
-                  </div>
-                ) : null}
-
-                {/* ❌ REPLACE THIS PART (lines 243-251) */}
-                {error ? (
-                  <div
-                    className="rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-3 text-sm text-white"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    {error}
-                  </div>
-                ) : null}
-
-                {/* ✅ WITH THIS NEW CODE */}
+                {/* ✅ ERROR BANNER - Only ONE */}
                 {error ? (
                   <div
                     className="rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-3 text-sm text-white"
@@ -290,8 +261,8 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   className={[
-                    "w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60 transition",
-                    isLocked ? "pointer-events-none cursor-not-allowed" : ""
+                    "w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 transition disabled:opacity-60 disabled:cursor-not-allowed",
+                    isLocked ? "pointer-events-none" : ""
                   ].join(" ")}
                   disabled={loading || isLocked}
                   aria-label="Sign in"
