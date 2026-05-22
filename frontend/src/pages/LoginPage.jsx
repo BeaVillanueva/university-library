@@ -240,6 +240,30 @@ export default function LoginPage() {
                   </div>
                 ) : null}
 
+                {/* LOCK BANNER */}
+                {lockedUntilMs && isLocked ? (
+                  <div
+                    className="rounded-lg border border-yellow-300/40 bg-yellow-500/20 px-4 py-3 text-sm text-white"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    Too many login attempts. Please wait{" "}
+                    <b>{formatSeconds(secondsLeft)}</b> before trying again.
+                  </div>
+                ) : null}
+
+                {/* ❌ REPLACE THIS PART (lines 243-251) */}
+                {error ? (
+                  <div
+                    className="rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-3 text-sm text-white"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {error}
+                  </div>
+                ) : null}
+
+                {/* ✅ WITH THIS NEW CODE */}
                 {error ? (
                   <div
                     className="rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-3 text-sm text-white"
@@ -247,14 +271,14 @@ export default function LoginPage() {
                     aria-live="polite"
                   >
                     <div>{error}</div>
-                    {error.includes("Network") && (
-                      <div className="text-xs text-white/80 mt-2">
-                        <p>✓ Backend server running at :8000?</p>
-                        <p>✓ Check browser console for more details</p>
+                    {error.includes("Cannot connect") && (
+                      <div className="text-xs text-white/80 mt-2 space-y-1">
+                        <p>✓ Backend server running?</p>
+                        <p>✓ Try: http://localhost/university-library/backend/public/index.php</p>
                         <button
                           type="button"
                           onClick={() => window.location.reload()}
-                          className="text-white/90 hover:underline mt-1"
+                          className="text-white/90 hover:underline mt-1 block"
                         >
                           Retry
                         </button>

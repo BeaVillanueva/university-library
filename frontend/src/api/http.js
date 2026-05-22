@@ -9,14 +9,14 @@ function getBaseUrl() {
     return fromLs;
   }
 
-  // ✅ FIXED: Always use current hostname (works on any IP/domain)
-  // This removes the isDev logic that was causing issues
+  // ✅ FIXED: Use current hostname WITHOUT :8000 port
+  // This works for Apache/PHP (no port needed)
   const host = window.location.hostname;
   const protocol = window.location.protocol;
 
-  // Backend URL
+  // ✅ REMOVED :8000 - Apache runs on port 80 (default)
   const defaultUrl =
-    `${protocol}//${host}:8000/university-library/backend/public/index.php`;
+    `${protocol}//${host}/university-library/backend/public/index.php`;
 
   return import.meta.env.VITE_API_BASE_URL || defaultUrl;
 }
@@ -32,10 +32,7 @@ export function setApiBaseUrl(next) {
 
 export const http = axios.create({
   baseURL: getBaseUrl(),
-
-  // ✅ IMPORTANT: Allow credentials for CORS
   withCredentials: true,
-
   timeout: 20000,
 });
 
@@ -68,7 +65,8 @@ http.interceptors.response.use(
 
     // Network/CORS/backend unreachable
     if (!error.response) {
-      console.error("[HTTP] Network/CORS error:", error);
+      console.error("[HTTP] Network/CORS error:", error.message);
+      console.error("[HTTP] Tried connecting to:", http.defaults.baseURL);
 
       return Promise.reject({
         ...error,

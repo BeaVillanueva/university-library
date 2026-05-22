@@ -1,45 +1,36 @@
 <?php
+
 declare(strict_types=1);
 
-// ---- CORS quick-guard (must run before any output) ----
+// ---- CORS (MUST be FIRST, before any output) ----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
-// ✅ FIXED: Allow ANY origin in development (permissive)
-// For production, replace with specific allowed origins
-$allowAnyOrigin = true; // Set to false in production
+$allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
 
-if ($allowAnyOrigin) {
-  // Allow all origins (development mode)
-  header("Access-Control-Allow-Origin: *");
-} else {
-  // Specific allowed origins (production mode)
-  $allowed = [
-    'http://localhost:5173',
-    'http://localhost:8000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:8000',
-    'http://192.168.1.5:5173',
-    'http://192.168.1.5:8000',
-  ];
-  
-  if ($origin && in_array($origin, $allowed, true)) {
-    header("Access-Control-Allow-Origin: {$origin}");
-    header("Vary: Origin");
-    header("Access-Control-Allow-Credentials: true");
-  }
+if (in_array($origin, $allowedOrigins, true)) {
+  header("Access-Control-Allow-Origin: {$origin}");
+  header('Vary: Origin');
+  header('Access-Control-Allow-Credentials: true');
 }
 
-header("Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
-header("Access-Control-Max-Age: 86400");
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+header('Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Max-Age: 86400');
+
+// ✅ Handle OPTIONS preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
-// ---- end CORS guard ----
 
-// ✅ TEMP DEBUG (remove later if you want)
+// ✅ DEBUG: Log all requests
+error_log("[API] {$_SERVER['REQUEST_METHOD']} {$_SERVER['REQUEST_URI']}");
+
+// ✅ TEMP DEBUG
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
@@ -87,7 +78,7 @@ $router->add('GET', '/health', function () {
 });
 
 /**
- * ✅ Lazy PDO connection (connect only when a route actually needs DB)
+ * ✅ Lazy PDO connection
  */
 function pdo(array $config): PDO {
   static $pdo = null;
@@ -98,8 +89,7 @@ function pdo(array $config): PDO {
 }
 
 /**
- * IMPORTANT:
- * Define $method and $path BEFORE any dynamic route checks use them.
+ * Parse request path
  */
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -107,22 +97,31 @@ $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
 $basePath = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
 $path = parse_url($uri, PHP_URL_PATH) ?: '/';
+
 if ($basePath && str_starts_with($path, $basePath)) {
   $path = substr($path, strlen($basePath)) ?: '/';
 }
 
-// ✅ support calling via /index.php/route
+// Support /index.php prefix
 if (str_starts_with($path, '/index.php')) {
   $path = substr($path, strlen('/index.php')) ?: '/';
 }
 
-// ✅ STRIP /api prefix if present
+// Support /api prefix
 if (str_starts_with($path, '/api')) {
   $path = substr($path, 4) ?: '/';
 }
 
+// Normalize path (remove trailing slashes except root)
+if ($path !== '/' && str_ends_with($path, '/')) {
+  $path = rtrim($path, '/');
+}
+
+// ✅ DEBUG
+error_log("[ROUTER] method=$method path=$path");
+
 /**
- * Auth
+ * Auth Routes
  */
 $router->add('POST', '/auth/login', function () use ($config) {
   AuthController::login(pdo($config), $config);
@@ -145,7 +144,7 @@ $router->add('POST', '/auth/logout', function () use ($config) {
 });
 
 /**
- * Activity Logs (Admin + Librarian)
+ * Activity Logs
  */
 $router->add('GET', '/activity-logs', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
@@ -155,8 +154,6 @@ $router->add('GET', '/activity-logs', function () use ($config) {
 
 /**
  * Categories
- * - list is allowed for authenticated users (for filters/forms)
- * - create/update/delete are admin only
  */
 $router->add('GET', '/categories', function () use ($config) {
   AuthMiddleware::requireAuth($config);
@@ -169,33 +166,24 @@ $router->add('POST', '/categories', function () use ($config) {
 });
 
 /**
- * Books
- * - list/get: any authenticated
- * - create/update/addStock: admin/librarian
+ * Books - ✅ GET /books is PUBLIC (no auth)
  */
 $router->add('GET', '/books', function () use ($config) {
   BooksController::list(pdo($config));
 });
 
-// ✅ FIX: allow manual add (create)
 $router->add('POST', '/books', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin','librarian']);
   BooksController::create(pdo($config), $auth);
 });
 
-$router->add('GET', '/books/_', function () { /* placeholder */ });
-
 /**
  * Borrowing
- * - student can borrow (request -> pending)
- * - librarian can list all + approve/decline/return
- * - admin can view all (list only)
- * - student can view their history
  */
 $router->add('POST', '/borrow', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
-  AuthMiddleware::requireRole($auth, ['student']); // ✅ student-only
+  AuthMiddleware::requireRole($auth, ['student']);
   BorrowController::borrow(pdo($config), $config, $auth);
 });
 $router->add('GET', '/borrow/my', function () use ($config) {
@@ -209,7 +197,7 @@ $router->add('GET', '/borrow/all', function () use ($config) {
 });
 
 /**
- * Import (Librarian ONLY)
+ * Import
  */
 $router->add('POST', '/import/books/preview', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
@@ -267,7 +255,7 @@ $router->add('GET', '/reports/student-stats', function () use ($config) {
 });
 
 /**
- * Users (Admin only)
+ * Users
  */
 $router->add('GET', '/users', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
@@ -285,19 +273,21 @@ $router->add('POST', '/users', function () use ($config) {
   UsersController::create(pdo($config), $auth);
 });
 
-//
-// Dynamic routes (simple manual dispatch for {id} patterns)
-// IMPORTANT: if a dynamic route matches, call controller and then exit.
-//
+/**
+ * Dynamic Routes - GET /books/{id}
+ */
 if ($method === 'GET') {
   $id = Path::matchId($path, '/books/');
   if ($id !== null) {
-    AuthMiddleware::requireAuth($config);
+    // ✅ GET /books/{id} is PUBLIC
     BooksController::get(pdo($config), $id);
     exit;
   }
 }
 
+/**
+ * Dynamic Routes - PATCH /books/{id}
+ */
 if (in_array($method, ['PUT','PATCH'], true)) {
   $id = Path::matchId($path, '/books/');
   if ($id !== null) {
@@ -324,6 +314,9 @@ if (in_array($method, ['PUT','PATCH'], true)) {
   }
 }
 
+/**
+ * Dynamic Routes - DELETE
+ */
 if ($method === 'DELETE') {
   $id = Path::matchId($path, '/users/');
   if ($id !== null) {
@@ -342,9 +335,10 @@ if ($method === 'DELETE') {
   }
 }
 
-// Borrow actions: approve/decline/return (LIBRARIAN ONLY)
+/**
+ * Dynamic Routes - POST (stock, cover, return, cancel, approve, decline)
+ */
 if ($method === 'POST') {
-  // add stock: POST /books/{id}/stock (LIBRARIAN/ADMIN)
   $sid = Path::matchSuffixId($path, '/books/', '/stock');
   if ($sid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -353,7 +347,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // ✅ upload cover: POST /books/{id}/cover (LIBRARIAN/ADMIN)
   $cid = Path::matchSuffixId($path, '/books/', '/cover');
   if ($cid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -362,7 +355,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // return: POST /borrow/{id}/return
   $rid = Path::matchSuffixId($path, '/borrow/', '/return');
   if ($rid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -371,7 +363,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // cancel: POST /borrow/{id}/cancel (STUDENT ONLY)
   $cid2 = Path::matchSuffixId($path, '/borrow/', '/cancel');
   if ($cid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -380,7 +371,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // approve: POST /borrow/{id}/approve
   $bid = Path::matchSuffixId($path, '/borrow/', '/approve');
   if ($bid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -389,7 +379,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // decline: POST /borrow/{id}/decline
   $bid2 = Path::matchSuffixId($path, '/borrow/', '/decline');
   if ($bid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -398,7 +387,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // approve: POST /users/{id}/approve
   $uid = Path::matchSuffixId($path, '/users/', '/approve');
   if ($uid !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -407,7 +395,6 @@ if ($method === 'POST') {
     exit;
   }
 
-  // decline: POST /users/{id}/decline
   $uid2 = Path::matchSuffixId($path, '/users/', '/decline');
   if ($uid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
@@ -417,39 +404,30 @@ if ($method === 'POST') {
   }
 }
 
-// ✅ FIXED: Serve static files from /covers directory (MUST BE AFTER ALL ROUTE CHECKS)
+/**
+ * Serve static files from /covers directory
+ */
 if ($method === 'GET' && str_starts_with($path, '/covers/')) {
   $filePath = __DIR__ . $path;
   
-  // Check if file exists
-  if (!file_exists($filePath)) {
+  if (!file_exists($filePath) || !is_file($filePath)) {
     http_response_code(404);
     exit;
   }
   
-  // Check if it's actually a file (not directory)
-  if (!is_file($filePath)) {
-    http_response_code(403);
-    exit;
-  }
-  
-  // Get MIME type using finfo
   $finfo = finfo_open(FILEINFO_MIME_TYPE);
   $mime = finfo_file($finfo, $filePath);
   finfo_close($finfo);
   
-  if (!$mime) {
-    $mime = 'application/octet-stream';
-  }
+  if (!$mime) $mime = 'application/octet-stream';
   
-  // Set proper headers
   header("Content-Type: {$mime}");
   header("Cache-Control: public, max-age=3600");
   header("Content-Length: " . filesize($filePath));
   
-  // Send file
   readfile($filePath);
   exit;
 }
 
+// ✅ Dispatch to router
 $router->dispatch($method, $path);
