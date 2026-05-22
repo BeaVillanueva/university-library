@@ -9,12 +9,9 @@ function getBaseUrl() {
     return fromLs;
   }
 
-  // Development detection
-  const isDev =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
-
-  const host = isDev ? "localhost" : window.location.hostname;
+  // ✅ FIXED: Always use current hostname (works on any IP/domain)
+  // This removes the isDev logic that was causing issues
+  const host = window.location.hostname;
   const protocol = window.location.protocol;
 
   // Backend URL
@@ -36,7 +33,7 @@ export function setApiBaseUrl(next) {
 export const http = axios.create({
   baseURL: getBaseUrl(),
 
-  // ✅ IMPORTANT FIX
+  // ✅ IMPORTANT: Allow credentials for CORS
   withCredentials: true,
 
   timeout: 20000,

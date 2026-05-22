@@ -3,20 +3,30 @@ declare(strict_types=1);
 
 // ---- CORS quick-guard (must run before any output) ----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-// ✅ Allow frontend to call backend API
-$allowed = [
-  'http://localhost:5173',
-  'http://localhost:8000',
-  'http://192.168.1.5:5173',
-  'http://192.168.1.5:8000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:8000'
-];
 
-if ($origin && in_array($origin, $allowed, true)) {
-  header("Access-Control-Allow-Origin: {$origin}");
-  header("Vary: Origin");
-  header("Access-Control-Allow-Credentials: true");
+// ✅ FIXED: Allow ANY origin in development (permissive)
+// For production, replace with specific allowed origins
+$allowAnyOrigin = true; // Set to false in production
+
+if ($allowAnyOrigin) {
+  // Allow all origins (development mode)
+  header("Access-Control-Allow-Origin: *");
+} else {
+  // Specific allowed origins (production mode)
+  $allowed = [
+    'http://localhost:5173',
+    'http://localhost:8000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8000',
+    'http://192.168.1.5:5173',
+    'http://192.168.1.5:8000',
+  ];
+  
+  if ($origin && in_array($origin, $allowed, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+    header("Vary: Origin");
+    header("Access-Control-Allow-Credentials: true");
+  }
 }
 
 header("Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS");
