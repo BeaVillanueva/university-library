@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useVoiceAnnouncements } from "../hooks/useVoiceGuide";
+import { useVoiceAnnouncements } from "../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../utils/voiceAccessibility";
 import { apiListActivityLogs } from "../api/activityLogs";
 import Pagination from "../components/Pagination";

@@ -4,7 +4,7 @@ import { apiListBooks, apiAddBookStock, apiGetBook } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import { apiBorrowBook, apiCancelBorrow, apiMyBorrowHistory } from "../api/borrow";
 import { useAuth } from "../state/AuthContext";
-import { useVoiceAnnouncements } from "../hooks/useVoiceGuide";
+import { useVoiceAnnouncements } from "../hooks/useVoiceAnnouncements";
 import { useDebounceAnnounce } from "../hooks/useDebounceAnnounce";
 import { voiceAccessibility } from "../utils/voiceAccessibility";
 import Pagination from "../components/Pagination";
