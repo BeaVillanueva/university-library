@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { announcePageLoad, announceAction, announceLoading } from "../hooks/useVoiceGuide";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useVoiceAnnouncements } from "../hooks/useVoiceGuide";
+import { voiceAccessibility } from "../utils/voiceAccessibility";
 import { apiListActivityLogs } from "../api/activityLogs";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
@@ -104,6 +105,9 @@ function formatDescription(action, details) {
 }
 
 export default function ActivityLogsPage() {
+  // ✅ Announce page load
+  useVoiceAnnouncements('ACTIVITY_LOGS');
+
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -116,19 +120,17 @@ export default function ActivityLogsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const rows = useMemo(() => items || [], [items]);
+  // ✅ Track last search to prevent repeated announcements
+  const lastSearchRef = useRef(null);
 
-  // ✅ Announce page load
-  useEffect(() => {
-    announcePageLoad("ACTIVITY_LOGS");
-  }, []);
+  const rows = useMemo(() => items || [], [items]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError("");
-      announceLoading("activity logs");
+      
       try {
         const res = await apiListActivityLogs({
           page,
@@ -140,6 +142,12 @@ export default function ActivityLogsPage() {
         if (!cancelled) {
           setItems(res.items || []);
           setTotalPages(res.total_pages || 1);
+
+          // ✅ Announce search results ONCE per search
+          if (q && q !== lastSearchRef.current) {
+            lastSearchRef.current = q;
+            voiceAccessibility.announceSearch(q, res.items?.length || 0);
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load logs");
@@ -161,42 +169,57 @@ export default function ActivityLogsPage() {
       <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 a11y-surface a11y-outline">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-slate-500 a11y-muted">Search</label>
+            <label className="text-xs text-slate-500 a11y-muted" htmlFor="search">
+              Search
+            </label>
             <input
+              id="search"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
               value={q}
               onChange={(e) => {
                 setPage(1);
                 setQ(e.target.value);
-                announceAction("SEARCH_PERFORMED", "activity logs");
+                // ✅ NO announce here - useEffect handles with debounce
               }}
               placeholder="name/email/action"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-500 a11y-muted">Action code (optional filter)</label>
+            <label className="text-xs text-slate-500 a11y-muted" htmlFor="action-filter">
+              Action code (optional filter)
+            </label>
             <input
+              id="action-filter"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
               value={action}
               onChange={(e) => {
                 setPage(1);
                 setAction(e.target.value);
-                announceAction("FILTER_APPLIED", "by action");
+                // ✅ Announce filter
+                if (e.target.value) {
+                  voiceAccessibility.announceFilter('action', e.target.value);
+                }
               }}
               placeholder="e.g. users.create"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-500 a11y-muted">Type (optional filter)</label>
+            <label className="text-xs text-slate-500 a11y-muted" htmlFor="type-filter">
+              Type (optional filter)
+            </label>
             <input
+              id="type-filter"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm a11y-input a11y-outline"
               value={entityType}
               onChange={(e) => {
                 setPage(1);
                 setEntityType(e.target.value);
-                announceAction("FILTER_APPLIED", "by entity type");
+                // ✅ Announce filter
+                if (e.target.value) {
+                  voiceAccessibility.announceFilter('entity type', e.target.value);
+                }
               }}
               placeholder="e.g. user, borrow, book"
             />
@@ -259,7 +282,8 @@ export default function ActivityLogsPage() {
             totalPages={totalPages} 
             onPageChange={(newPage) => {
               setPage(newPage);
-              announceAction("PAGE_CHANGED", `${newPage}`);
+              // ✅ Announce page change
+              voiceAccessibility.announcePage(newPage, totalPages);
             }} 
           />
         </div>

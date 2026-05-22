@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { apiListBooks, apiAddBookStock, apiGetBook } from "../api/books";
 import { apiListCategories } from "../api/categories";
 import { apiBorrowBook, apiCancelBorrow, apiMyBorrowHistory } from "../api/borrow";
 import { useAuth } from "../state/AuthContext";
+import { useVoiceAnnouncements } from "../hooks/useVoiceGuide";
+import { useDebounceAnnounce } from "../hooks/useDebounceAnnounce";
+import { voiceAccessibility } from "../utils/voiceAccessibility";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
 import TextToSpeechButton from "../components/TextToSpeechButton";
@@ -21,9 +24,9 @@ export default function BooksPage() {
 
   const MAX_ACTIVE = 3;
 
-  // ✅ IMPORTANT:
-  // Your API base is usually ".../public/index.php"
-  // But static files (covers) are served from ".../public" (WITHOUT index.php)
+  // ✅ Announce page load
+  useVoiceAnnouncements('BOOKS');
+
   // ✅ IMPORTANT: Your API base setup
   const API_BASE =
     localStorage.getItem("ulms_api_base_url") ||
@@ -49,6 +52,9 @@ export default function BooksPage() {
   const [myBorrows, setMyBorrows] = useState([]);
   const [myBorrowsLoading, setMyBorrowsLoading] = useState(false);
   const [borrowCovers, setBorrowCovers] = useState({}); // ✅ Cache for cover URLs
+
+  // ✅ Track if search was already announced to prevent repeats
+  const lastSearchRef = useRef(null);
 
   const ttsText = useMemo(() => {
     return items
@@ -135,6 +141,7 @@ export default function BooksPage() {
       setLoading(true);
       setError("");
       setNotice("");
+      
       try {
         const res = await apiListBooks({
           page,
@@ -146,6 +153,12 @@ export default function BooksPage() {
         if (!cancelled) {
           setItems(res.items || []);
           setTotalPages(res.total_pages || 1);
+
+          // ✅ Announce search results once
+          if (q && q !== lastSearchRef.current) {
+            lastSearchRef.current = q;
+            voiceAccessibility.announceSearch(q, res.items?.length || 0);
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load books");
@@ -171,6 +184,10 @@ export default function BooksPage() {
     setError("");
     try {
       const res = await apiBorrowBook(bookId);
+      const bookTitle = items.find(b => b.id === bookId)?.title || 'Book';
+      
+      // ✅ Announce borrow success
+      voiceAccessibility.announceBorrow(bookTitle, res?.status || 'sent');
 
       const msg = res?.message || "Request sent";
       const due = res?.due_date ? ` Due date: ${res.due_date}` : "";
@@ -183,6 +200,9 @@ export default function BooksPage() {
     } catch (e) {
       const data = e?.response?.data;
       const msg = data?.error || e?.message || "Borrow failed";
+      // ✅ Announce error
+      voiceAccessibility.announceError(msg);
+      
       if (msg === "Borrow limit reached") {
         setError(`Borrow limit reached. Maximum active borrows: ${data?.max_active ?? 3}.`);
       } else {
@@ -199,10 +219,14 @@ export default function BooksPage() {
 
     try {
       await apiCancelBorrow(recordId);
+      // ✅ Announce cancellation
+      voiceAccessibility.announceSuccess("Pending request cancelled.");
       setNotice("Pending request cancelled.");
       await loadMyBorrows();
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Cancel failed.");
+      const msg = e?.response?.data?.error || e?.message || "Cancel failed.";
+      voiceAccessibility.announceError(msg);
+      setError(msg);
     }
   }
 
@@ -220,10 +244,14 @@ export default function BooksPage() {
     setNotice("");
     try {
       await apiAddBookStock(bookId, Math.trunc(qty));
+      // ✅ Announce stock added
+      voiceAccessibility.announceSuccess("Stock added successfully.");
       setNotice("Stock added successfully.");
       await refreshBooks();
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Failed to add stock");
+      const msg = e?.response?.data?.error || e?.message || "Failed to add stock";
+      voiceAccessibility.announceError(msg);
+      setError(msg);
     }
   }
 
@@ -232,6 +260,7 @@ export default function BooksPage() {
     setQ("");
     setCategoryId("");
     setAvailability("");
+    lastSearchRef.current = null;
   }
 
   function coverSrc(b) {
@@ -446,6 +475,11 @@ export default function BooksPage() {
               onChange={(e) => {
                 setPage(1);
                 setCategoryId(e.target.value);
+                // ✅ Announce filter
+                if (e.target.value) {
+                  const selectedCat = categories.find(c => c.id == e.target.value);
+                  voiceAccessibility.announceFilter('category', selectedCat?.name || e.target.value);
+                }
               }}
               aria-label="Filter by category"
             >
@@ -469,6 +503,10 @@ export default function BooksPage() {
               onChange={(e) => {
                 setPage(1);
                 setAvailability(e.target.value);
+                // ✅ Announce filter
+                if (e.target.value) {
+                  voiceAccessibility.announceFilter('availability', e.target.value);
+                }
               }}
               aria-label="Filter by availability"
             >
@@ -619,7 +657,15 @@ export default function BooksPage() {
 
             {/* Pagination */}
             <div className="mt-6 flex items-center justify-center gap-3">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+              <Pagination 
+                page={page} 
+                totalPages={totalPages} 
+                onPageChange={(newPage) => {
+                  setPage(newPage);
+                  // ✅ Announce page change
+                  voiceAccessibility.announcePage(newPage, totalPages);
+                }} 
+              />
             </div>
           </>
         )}

@@ -1,50 +1,22 @@
-import { loadA11yPrefs, makeA11yStorageKey } from '../state/a11yPrefs';
-import { useAuth } from '../state/AuthContext';
+/**
+ * useVoiceGuide.js
+ * Refactored to use centralized VoiceReaderService
+ * ✅ Maintains backward compatibility
+ */
+
+import { voiceReaderService } from '../services/VoiceReaderService';
 
 /**
- * Helper function to get current user's voice reader setting
+ * Check if voice reader is enabled
+ * ✅ Uses global flag AND service state
  */
-function isVoiceReaderEnabled() {
-  // ✅ CHECK THE GLOBAL FLAG FIRST (set by a11yPrefs.js)
-  if (window.__voiceReaderEnabled === true) {
-    return true;
-  }
-  
-  // ✅ FALLBACK: Load from localStorage with proper user key
-  try {
-    const userEmail = localStorage.getItem('ulms_user')
-      ? JSON.parse(localStorage.getItem('ulms_user'))?.email || 'guest'
-      : 'guest';
-    
-    const prefs = loadA11yPrefs(userEmail);
-    return prefs?.voiceReader === true;
-  } catch {
-    return false;
-  }
+export function isVoiceReaderEnabled() {
+  return voiceReaderService.getEnabled();
 }
 
 /**
- * Helper function to speak text if voice reader enabled
- */
-function speak(text, options = {}) {
-  if (!isVoiceReaderEnabled() || !text) return;
-
-  // Stop any ongoing speech
-  if (window.speechSynthesis?.speaking) {
-    window.speechSynthesis.cancel();
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = options.rate || 1;
-  utterance.pitch = options.pitch || 1;
-  utterance.volume = options.volume || 1;
-  utterance.lang = options.lang || 'en-US';
-
-  window.speechSynthesis?.speak(utterance);
-}
-
-/**
- * Announce sa page load
+ * Announce page load
+ * @param {string} pageName - Name of page (e.g., 'DASHBOARD', 'BOOKS')
  */
 export function announcePageLoad(pageName) {
   if (!isVoiceReaderEnabled()) return;
@@ -52,8 +24,8 @@ export function announcePageLoad(pageName) {
   const messages = {
     DASHBOARD: "Welcome to the dashboard page. You can view your library statistics and recent activity.",
     ACTIVITY_LOGS: "This is the activity logs page. Here you can see all the actions performed in the library system.",
-    BOOKS: "You are now on the books page. You can search, filter, borrow, or manage books here.",
-    MY_BORROWS: "This is your borrowed books page. You can view all books you have borrowed and their due dates.",
+    BOOKS: "Welcome to the books page. You can search, browse, and borrow library books.",
+    MY_BORROWS: "This is your borrowed books page. You can view all books you have currently borrowed and their due dates.",
     USERS: "You are on the users management page. You can create, edit, or delete users here.",
     SETTINGS: "You are on the settings page. Here you can adjust accessibility preferences and other settings.",
     LOGIN: "Welcome to the login page. Please enter your email and password to continue.",
@@ -61,11 +33,13 @@ export function announcePageLoad(pageName) {
   };
 
   const text = messages[pageName] || `You are on the ${pageName} page.`;
-  speak(text);
+  voiceReaderService.speak(text);
 }
 
 /**
  * Announce user actions
+ * @param {string} action - Action type
+ * @param {string} details - Additional details
  */
 export function announceAction(action, details = "") {
   if (!isVoiceReaderEnabled()) return;
@@ -79,7 +53,7 @@ export function announceAction(action, details = "") {
     BOOK_CREATED: `New book ${details} has been added to the library.`,
     BOOK_UPDATED: `Book ${details} has been updated.`,
     FILTER_APPLIED: `Filter applied. ${details || 'Results are now displayed.'}`,
-    SEARCH_PERFORMED: `Search completed. ${details} results found.`,
+    SEARCH_PERFORMED: `Search completed. ${details || 'Results displayed.'}`,
     SORT_APPLIED: `Results sorted by ${details}.`,
     PAGE_CHANGED: `Page ${details}.`,
     LOGOUT: "You have been logged out successfully.",
@@ -92,50 +66,55 @@ export function announceAction(action, details = "") {
   const text = messages[action] || details;
   if (!text) return;
 
-  speak(text);
+  voiceReaderService.speak(text);
 }
 
 /**
  * Announce form field focus
+ * @param {string} fieldLabel - Label of the field
+ * @param {string} helpText - Optional help text
  */
 export function announceFormField(fieldLabel, helpText = "") {
   if (!isVoiceReaderEnabled()) return;
 
   const text = helpText ? `${fieldLabel}. ${helpText}` : `${fieldLabel} field. Please enter the required information.`;
-  speak(text);
+  voiceReaderService.speak(text);
 }
 
 /**
  * Announce loading state
+ * @param {string} what - What's being loaded
  */
 export function announceLoading(what = "data") {
   if (!isVoiceReaderEnabled()) return;
 
   const text = `Loading ${what}. Please wait.`;
-  speak(text);
+  voiceReaderService.speak(text);
 }
 
 /**
  * Announce success message
+ * @param {string} message - Success message
  */
 export function announceSuccess(message) {
   if (!isVoiceReaderEnabled()) return;
 
-  speak(`Success. ${message}`);
+  voiceReaderService.speak(`Success. ${message}`);
 }
 
 /**
  * Announce error message
+ * @param {string} message - Error message
  */
 export function announceError(message) {
   if (!isVoiceReaderEnabled()) return;
 
-  speak(`Error. ${message}`);
+  voiceReaderService.speak(`Error. ${message}`);
 }
 
 /**
  * Test voice reader
  */
 export function testVoiceReader() {
-  speak("Voice reader test. This is a test announcement.");
+  voiceReaderService.speak("Voice reader test. This is a test announcement.");
 }

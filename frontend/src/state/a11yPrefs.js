@@ -1,10 +1,12 @@
+import { voiceReaderService } from '../services/VoiceReaderService';
+
 export const DEFAULT_A11Y = {
   theme: "system", // system | light | dark
   contrast: "normal", // normal | high
   fontSize: "md", // sm | md | lg | xl
   reduceMotion: false,
   dyslexiaFont: false,
-  voiceReader: false // ✅ NEW: Voice Reader feature
+  voiceReader: false // ✅ Voice Reader feature
 };
 
 // NOTE: per-user key: ulms_a11y_prefs_v1::<userKey>
@@ -53,8 +55,10 @@ export function applyA11yPrefs(prefs) {
   root.classList.toggle("reduce-motion", Boolean(prefs.reduceMotion));
   root.classList.toggle("dyslexia-font", Boolean(prefs.dyslexiaFont));
   
-  // ✅ Store voice reader preference globally for access
-  window.__voiceReaderEnabled = Boolean(prefs.voiceReader);
+  // ✅ IMPROVED: Sync with service AND global flag
+  const voiceEnabled = Boolean(prefs.voiceReader);
+  window.__voiceReaderEnabled = voiceEnabled;
+  voiceReaderService.setEnabled(voiceEnabled);
 }
 
 export function resetA11yPrefs() {
