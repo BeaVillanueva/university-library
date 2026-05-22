@@ -11,24 +11,23 @@ export default function MyBorrowsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ Get dynamic API base URL
+  // ✅ FIXED: Get correct API base URL
   const getApiBase = () => {
     const fromLs = localStorage.getItem("ulms_api_base_url");
     if (fromLs && fromLs.startsWith("http")) {
-      // Remove the /index.php part to get just the base
+      // Remove /index.php to get base path
       return fromLs.replace(/\/index\.php\/?$/, "");
     }
     
     // Auto-detect from current host
     const host = window.location.hostname;
     const protocol = window.location.protocol;
-    const port = window.location.port ? `:${window.location.port}` : "";
-    return `${protocol}//${host}${port}`;
+    // ✅ FIXED: Default to Apache path (no port)
+    return `${protocol}//${host}/university-library/backend/public`;
   };
 
   const API_BASE_URL = getApiBase();
 
-  // ✅ Announce page load
   useEffect(() => {
     announcePageLoad("MY_BORROWS");
   }, []);
@@ -157,12 +156,17 @@ function BorrowCard({ record, isActive, apiBase }) {
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
-  // ✅ FIXED: Use dynamic apiBase instead of hard-coded localhost
+  // ✅ FIXED: Construct proper image URL
   const imageUrl = record.cover_image_url
     ? record.cover_image_url.startsWith("http")
       ? record.cover_image_url
       : `${apiBase}${record.cover_image_url}`
     : null;
+
+  // ✅ DEBUG: Log the URL for checking
+  if (imageUrl && process.env.NODE_ENV === "development") {
+    console.log("Book cover URL:", imageUrl);
+  }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -173,8 +177,11 @@ function BorrowCard({ record, isActive, apiBase }) {
             alt={record.title}
             className="h-full w-full object-cover"
             onError={(e) => {
+              console.error("Image failed to load:", imageUrl);
               e.target.style.display = "none";
-              e.target.nextElementSibling.style.display = "flex";
+              if (e.target.nextElementSibling) {
+                e.target.nextElementSibling.style.display = "flex";
+              }
             }}
           />
         ) : null}

@@ -22,13 +22,6 @@ export default function SettingsPage() {
         <AccessibilitySettingsPanel />
       </div>
 
-      {/* Additional sections can be added here */}
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Account Information</h2>
-        <p className="mt-1 text-sm text-slate-600 a11y-muted">
-          Your profile and account details are managed by the library administration.
-        </p>
-      </div>
     </div>
   );
 }
