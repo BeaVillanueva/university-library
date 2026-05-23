@@ -8,6 +8,7 @@ import {
 } from "../api/announcements";
 import { useAuth } from "../state/AuthContext";
 import Alert from "./Alert";
+import { announcePageLoad } from "../hooks/useVoiceGuide";
 
 export default function AnnouncementPanel() {
   const { user } = useAuth();
@@ -27,8 +28,13 @@ export default function AnnouncementPanel() {
   const isAdmin = ["admin", "librarian"].includes(user?.role);
 
   useEffect(() => {
-    loadAnnouncements();
-  }, []);
+  loadAnnouncements();
+
+  announcePageLoad(
+    "ANNOUNCEMENTS"
+  );
+
+}, []);
 
   async function loadAnnouncements() {
     setLoading(true);
@@ -205,7 +211,7 @@ export default function AnnouncementPanel() {
                 backgroundPosition: "center",
               }}
             >
-              <div className="absolute inset-0 flex flex-col items-center px-10 pt-[120px] pb-8 text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-start px-10 pt-[120px] pb-10 text-center">
                 {isAdmin && (
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-bold ${

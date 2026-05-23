@@ -28,6 +28,7 @@ export function announcePageLoad(pageName) {
     MY_BORROWS: "This is your borrowed books page. You can view all books you have currently borrowed and their due dates.",
     USERS: "You are on the users management page. You can create, edit, or delete users here.",
     SETTINGS: "You are on the settings page. Here you can adjust accessibility preferences and other settings.",
+    ANNOUNCEMENTS: "Welcome to the announcements page. Here you can view important library updates and notices from the librarian and administrator.",
     LOGIN: "Welcome to the login page. Please enter your email and password to continue.",
     REGISTER: "Welcome to the student registration page. Please fill in your information to create an account."
   };
