@@ -1,91 +1,116 @@
-// frontend/src/components/AnnouncementPanel.jsx
-
-import React, { useEffect, useState } from 'react';
-import { FiX, FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
-import { apiListAnnouncements, apiCreateAnnouncement, apiUpdateAnnouncement, apiDeleteAnnouncement } from '../api/announcements';
-import { useTranslation } from '../hooks/useTranslation';
-import { useAuth } from '../state/AuthContext';
-import Alert from './Alert';
+import React, { useEffect, useState } from "react";
+import { FiEdit2, FiTrash2, FiPlus } from "react-icons/fi";
+import {
+  apiListAnnouncements,
+  apiCreateAnnouncement,
+  apiUpdateAnnouncement,
+  apiDeleteAnnouncement,
+} from "../api/announcements";
+import { useAuth } from "../state/AuthContext";
+import Alert from "./Alert";
 
 export default function AnnouncementPanel() {
-  const { t } = useTranslation();
   const { user } = useAuth();
+
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({ title: '', message: '', status: 'active' });
 
-  const isAdmin = ['admin', 'librarian'].includes(user?.role);
+  const [formData, setFormData] = useState({
+    title: "",
+    message: "",
+    status: "active",
+  });
+
+  const isAdmin = ["admin", "librarian"].includes(user?.role);
 
   useEffect(() => {
     loadAnnouncements();
   }, []);
 
-  const loadAnnouncements = async () => {
+  async function loadAnnouncements() {
     setLoading(true);
     try {
       const res = await apiListAnnouncements();
-      setAnnouncements(res.announcements || []);
+      setAnnouncements(res?.announcements || []);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load announcements');
+      setError(err?.response?.data?.error || "Failed to load announcements");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
+
     try {
       if (editId) {
-        await apiUpdateAnnouncement(editId, formData.title, formData.message, formData.status);
-        setEditId(null);
+        await apiUpdateAnnouncement(
+          editId,
+          formData.title,
+          formData.message,
+          formData.status
+        );
       } else {
         await apiCreateAnnouncement(formData.title, formData.message);
       }
-      setFormData({ title: '', message: '', status: 'active' });
+
       setShowForm(false);
+      setEditId(null);
+      setFormData({ title: "", message: "", status: "active" });
       await loadAnnouncements();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save announcement');
+      setError(err?.response?.data?.error || "Failed to save announcement");
     }
-  };
+  }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm(t('announcement.confirm_delete'))) return;
+  function handleEdit(ann) {
+    setEditId(ann.id);
+    setFormData({
+      title: ann.title,
+      message: ann.message,
+      status: ann.status || "active",
+    });
+    setShowForm(true);
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Delete announcement?")) return;
+
     try {
       await apiDeleteAnnouncement(id);
       await loadAnnouncements();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete announcement');
+      setError(err?.response?.data?.error || "Failed to delete announcement");
     }
-  };
-
-  const handleEdit = (announcement) => {
-    setEditId(announcement.id);
-    setFormData({
-      title: announcement.title,
-      message: announcement.message,
-      status: announcement.status,
-    });
-    setShowForm(true);
-  };
+  }
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-slate-900">{t('announcement.title')}</h2>
+    <div className="space-y-8">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-[#27553f]">
+            Library Announcements
+          </h1>
+          <p className="mt-1 text-slate-500">
+            Stay updated with library news.
+          </p>
+        </div>
+
         {isAdmin && (
           <button
+            type="button"
             onClick={() => {
               setShowForm(!showForm);
               setEditId(null);
-              setFormData({ title: '', message: '', status: 'active' });
+              setFormData({ title: "", message: "", status: "active" });
             }}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 rounded-2xl bg-[#27553f] px-5 py-3 text-sm font-semibold text-white hover:bg-[#1f4432]"
           >
-            <FiPlus /> {t('announcement.create')}
+            <FiPlus />
+            New
           </button>
         )}
       </div>
@@ -93,108 +118,139 @@ export default function AnnouncementPanel() {
       {error && <Alert type="error">{error}</Alert>}
 
       {showForm && isAdmin && (
-        <div className="mb-6 p-4 border border-slate-200 rounded-lg bg-white">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                {t('announcement.title')}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                placeholder={t('announcement.title')}
-              />
-            </div>
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="space-y-4">
+            <input
+              required
+              value={formData.title}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
+              placeholder="Announcement title"
+              className="w-full rounded-2xl border border-slate-200 p-4 outline-none focus:ring-2 focus:ring-emerald-400"
+            />
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                {t('announcement.message')}
-              </label>
-              <textarea
-                required
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                rows="4"
-                placeholder={t('announcement.message')}
-              />
-            </div>
+            <textarea
+              rows={5}
+              required
+              value={formData.message}
+              onChange={(e) =>
+                setFormData({ ...formData, message: e.target.value })
+              }
+              placeholder="Announcement message"
+              className="w-full rounded-2xl border border-slate-200 p-4 outline-none focus:ring-2 focus:ring-emerald-400"
+            />
 
             {editId && (
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {t('announcement.status')}
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                >
-                  <option value="active">{t('announcement.active')}</option>
-                  <option value="inactive">{t('announcement.inactive')}</option>
-                </select>
-              </div>
+              <select
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData({ ...formData, status: e.target.value })
+                }
+                className="w-full rounded-2xl border border-slate-200 p-4 outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             )}
 
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                className="rounded-2xl bg-[#27553f] px-6 py-3 font-semibold text-white hover:bg-[#1f4432]"
               >
-                {t('button.save')}
+                Save
               </button>
+
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
-                className="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-400"
+                onClick={() => {
+                  setShowForm(false);
+                  setEditId(null);
+                }}
+                className="rounded-2xl bg-slate-200 px-6 py-3 font-semibold text-slate-700 hover:bg-slate-300"
               >
-                {t('button.cancel')}
+                Cancel
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-slate-600">{t('button.loading')}</div>
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+          Loading announcements...
+        </div>
       ) : announcements.length === 0 ? (
-        <div className="text-center py-8 text-slate-600">
-          {t('announcement.no_announcements')}
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+          <h2 className="text-lg font-semibold text-slate-800">
+            No announcements yet
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            New library updates will appear here.
+          </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {announcements.map((ann) => (
             <div
               key={ann.id}
-              className="p-4 border border-slate-200 rounded-lg bg-white hover:shadow-md transition"
+              className="relative h-[390px] overflow-hidden rounded-3xl bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl hover:ring-2 hover:ring-[#27553f]/20"
+              style={{
+                backgroundImage: "url('/announcementboard.png')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-slate-900">{ann.title}</h3>
-                  <p className="text-slate-700 mt-1">{ann.message}</p>
-                  <div className="mt-2 text-xs text-slate-500 flex gap-4">
-                    <span>{t('announcement.posted_by')}: {ann.posted_by_name}</span>
-                    <span>{new Date(ann.created_at).toLocaleDateString()}</span>
-                    <span className={`px-2 py-1 rounded ${ann.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>
-                      {ann.status === 'active' ? t('announcement.active') : t('announcement.inactive')}
-                    </span>
+              <div className="absolute inset-0 flex flex-col items-center px-10 pt-[120px] pb-8 text-center">
+                {isAdmin && (
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      ann.status === "active"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {ann.status === "active" ? "Active" : "Inactive"}
+                  </span>
+                )}
+
+                <h2 className="mt-4 line-clamp-2 text-2xl font-black uppercase text-[#27553f]">
+                  {ann.title}
+                </h2>
+
+                <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-700">
+                  {ann.message}
+                </p>
+
+                <div className="mt-auto -translate-y-4 text-xs text-[#27553f]">
+                  <div>
+                    Posted by: {ann.posted_by_name || "Library Staff"}
+                  </div>
+                  <div className="mt-1">
+                    {new Date(ann.created_at).toLocaleDateString()}
                   </div>
                 </div>
 
                 {isAdmin && (
-                  <div className="flex gap-2 ml-4">
+                  <div className="mt-3 flex gap-2">
                     <button
+                      type="button"
                       onClick={() => handleEdit(ann)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      className="rounded-xl bg-[#27553f] p-2 text-white hover:bg-[#1f4432]"
+                      title="Edit"
                     >
                       <FiEdit2 />
                     </button>
+
                     <button
+                      type="button"
                       onClick={() => handleDelete(ann.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded"
+                      className="rounded-xl bg-red-600 p-2 text-white hover:bg-red-700"
+                      title="Delete"
                     >
                       <FiTrash2 />
                     </button>

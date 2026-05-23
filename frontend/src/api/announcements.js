@@ -1,29 +1,54 @@
-// frontend/src/api/announcements.js
+import { http } from "./http";
 
-import axios from 'axios';
+// GET all announcements
+export async function getAnnouncements() {
+  const { data } = await http.get("/announcements");
+  return data;
+}
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+// CREATE announcement
+export async function createAnnouncement(payload) {
+  const { data } = await http.post("/announcements", payload);
+  return data;
+}
 
-export const apiListAnnouncements = async () => {
-  const res = await axios.get(`${API_BASE}/announcements`);
-  return res.data;
-};
+// UPDATE announcement
+export async function updateAnnouncement(id, payload) {
+  const { data } = await http.put(`/announcements/${id}`, payload);
+  return data;
+}
 
-export const apiCreateAnnouncement = async (title, message) => {
-  const res = await axios.post(`${API_BASE}/announcements`, { title, message });
-  return res.data;
-};
+// DELETE announcement
+export async function deleteAnnouncement(id) {
+  const { data } = await http.delete(`/announcements/${id}`);
+  return data;
+}
 
-export const apiUpdateAnnouncement = async (id, title, message, status) => {
-  const res = await axios.put(`${API_BASE}/announcements/${id}`, {
+// ======================
+// Compatible sa AnnouncementPanel.jsx
+// ======================
+
+// LIST
+export const apiListAnnouncements = getAnnouncements;
+export const apiGetAnnouncements = getAnnouncements;
+
+// CREATE
+export async function apiCreateAnnouncement(title, message) {
+  return createAnnouncement({
+    title,
+    message,
+    status: "active",
+  });
+}
+
+// UPDATE
+export async function apiUpdateAnnouncement(id, title, message, status) {
+  return updateAnnouncement(id, {
     title,
     message,
     status,
   });
-  return res.data;
-};
+}
 
-export const apiDeleteAnnouncement = async (id) => {
-  const res = await axios.delete(`${API_BASE}/announcements/${id}`);
-  return res.data;
-};
+// DELETE
+export const apiDeleteAnnouncement = deleteAnnouncement;

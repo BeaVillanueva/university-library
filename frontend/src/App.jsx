@@ -35,6 +35,7 @@ import AdminReportsPage from "./pages/admin/AdminReportsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import DevInfoPage from "./pages/DevInfoPage.jsx";
 import ActivityLogsPage from "./pages/ActivityLogsPage.jsx";
+import AnnouncementPage from "./pages/AnnouncementPage.jsx";
 
 export default function App() {
   useEffect(() => {
@@ -200,6 +201,8 @@ export default function App() {
         />
 
         <Route path="settings" element={<SettingsPage />} />
+
+        <Route path="announcements" element={<AnnouncementPage />} />
 
         {/* Dev page: librarian-only */}
         <Route

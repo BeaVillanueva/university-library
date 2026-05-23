@@ -6,6 +6,7 @@ import { http } from "../api/http";
 import { apiListPendingStudents } from "../api/users";
 import { apiListAllBorrows } from "../api/borrow";
 import { useIdleTimer } from "../hooks/useIdleTimer";
+import { apiListAnnouncements } from "../api/announcements";
 import {
   FiHome,
   FiUsers,
@@ -16,6 +17,7 @@ import {
   FiClock,
   FiSettings,
   FiFileText,
+  FiBell,
   FiChevronDown,
   FiChevronUp,
   FiLogOut,
@@ -113,6 +115,8 @@ export default function AppLayout() {
     const raw = localStorage.getItem(LS_SIDEBAR_COLLAPSED);
     return raw === "1";
   });
+
+  const [announcementCount, setAnnouncementCount] = useState(0);
 
   const role = user?.role;
   const isAdmin = role === "admin";
@@ -228,6 +232,66 @@ export default function AppLayout() {
       clearInterval(t);
     };
   }, [isLibrarian]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAnnouncementCount() {
+      try {
+        const res = await apiListAnnouncements();
+
+        const items = Array.isArray(res?.announcements)
+          ? res.announcements
+          : [];
+
+        const activeItems = items.filter(
+          (a) => a.status === "active"
+        );
+
+        const lastSeen =
+          localStorage.getItem(
+            "last_seen_announcements"
+          );
+
+        const newItems =
+          activeItems.filter((a) => {
+            const date =
+              a.updated_at ||
+              a.created_at;
+
+            return (
+              !lastSeen ||
+              new Date(date) >
+                new Date(lastSeen)
+            );
+          });
+
+        if (!cancelled) {
+          setAnnouncementCount(
+            newItems.length
+          );
+        }
+
+      } catch {
+        if (!cancelled) {
+          setAnnouncementCount(0);
+        }
+      }
+    }
+
+    loadAnnouncementCount();
+
+    const t = setInterval(
+      loadAnnouncementCount,
+      30000
+    );
+
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+
+  }, []);
 
   const appBg = a11yMode ? "bg-slate-950" : "bg-[#e9eff0]";
 
@@ -470,6 +534,23 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
+              <LinkItem
+                to="/app/announcements"
+                label="Announcements"
+                icon={FiBell}
+                onNavigate={() => {
+                  localStorage.setItem(
+                    "last_seen_announcements",
+                    new Date().toISOString()
+                  );
+
+                  setAnnouncementCount(0);
+
+                  onNavigate?.();
+                }}
+                collapsed={collapsed}
+              />
+
               {isStudent ? (
                 <LinkItem
                   to="/app/my/borrows"
@@ -499,26 +580,36 @@ export default function AppLayout() {
               ) : null}
             </nav>
 
-            <div className="pt-3 shrink-0">
+            <div className="pt-3 shrink-0 space-y-4">
               <button
                 type="button"
                 onClick={handleLogout}
-                className={[
-                  "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                  collapsed ? "px-3" : "",
-                  "bg-rose-50 text-rose-700 border border-rose-200",
-                  "shadow-[0_0_0_3px_rgba(244,63,94,0.18),0_10px_25px_rgba(244,63,94,0.15)]",
-                  "hover:bg-rose-100 hover:border-rose-300 hover:text-rose-800",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                ].join(" ")}
-                aria-label="Logout"
-                title={collapsed ? "Logout" : undefined}
+                className="w-full rounded-2xl bg-[#f7f4ea] px-4 py-3 text-sm font-bold text-[#27553f] shadow-sm hover:bg-[#fff8df]"
               >
                 <span className="flex items-center justify-center gap-3">
-                  <FiLogOut size={18} aria-hidden="true" />
+                  <FiLogOut size={18} />
                   <span className={collapsed ? "hidden" : ""}>Logout</span>
                 </span>
               </button>
+
+              {!collapsed && (
+                <div className="flex items-center justify-center gap-3 px-3 pb-3">
+                  <img
+                    src="/cvsulogo.png"
+                    alt="Cavite State University Logo"
+                    className="h-14 w-14 object-contain"
+                  />
+
+                  <div>
+                    <div className="font-serif text-lg leading-tight text-[#f7f4ea]">
+                      CAVITE STATE<br />UNIVERSITY
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-[#d6a436]">
+                      Truth. Integrity. Excellence. Service.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </aside>
