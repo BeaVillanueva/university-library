@@ -2,8 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { apiExportReportCsv, apiReportList } from "../../api/reports";
 import { useAuth } from "../../state/AuthContext";
 import Alert from "../../components/Alert";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
+import { voiceAccessibility } from "../../utils/voiceAccessibility";
 
 export default function AdminReportsPage() {
+  // ✅ Announce page load
+  useVoiceAnnouncements('ADMIN_REPORTS');
+
   const { token } = useAuth();
 
   const [type, setType] = useState("borrowed");
@@ -56,8 +61,13 @@ export default function AdminReportsPage() {
       a.remove();
       URL.revokeObjectURL(url);
       setNotice("CSV exported.");
+      
+      voiceAccessibility.announceSuccess("CSV report exported successfully.");
+    
     } catch (e) {
-      setError(e?.message || "Export failed");
+      const msg = e?.message || "Export failed";
+      voiceAccessibility.announceError(msg);
+      setError(msg);
     }
   }
 

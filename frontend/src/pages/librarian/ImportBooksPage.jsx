@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
+import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import { apiCommitBooksImport, apiCreateBookManual, apiPreviewBooksCsv } from "../../api/importBooks";
 import { apiUploadBookCover } from "../../api/books";
 import { apiListCategories } from "../../api/categories";
@@ -34,6 +36,8 @@ function hasExistingIsbnError(row) {
 }
 
 export default function ImportBooksPage() {
+    useVoiceAnnouncements('IMPORT_BOOKS');
+
   // ===== bulk import state =====
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState([]);
@@ -239,6 +243,7 @@ export default function ImportBooksPage() {
       if (!Number.isFinite(newId) || newId <= 0) {
         // book was created but we can't upload cover without id
         setNotice("Book added successfully. (Cover upload skipped: missing book_id in response)");
+        voiceAccessibility.announceSuccess("Books imported successfully.");
         resetManual();
         return;
       }

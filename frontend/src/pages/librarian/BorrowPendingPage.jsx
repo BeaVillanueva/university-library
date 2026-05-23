@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Pagination from "../../components/Pagination.jsx";
 import { apiApproveBorrow, apiDeclineBorrow, apiListAllBorrows } from "../../api/borrow.js";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
+import { voiceAccessibility } from "../../utils/voiceAccessibility";
 
 function fmt(s) {
   if (!s) return "—";
@@ -8,6 +10,9 @@ function fmt(s) {
 }
 
 export default function BorrowPendingPage() {
+  // ✅ Announce page load
+  useVoiceAnnouncements('BORROW_PENDING');
+
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -42,9 +47,12 @@ export default function BorrowPendingPage() {
     if (!confirm("Approve this borrow request?")) return;
     try {
       await apiApproveBorrow(id);
+      voiceAccessibility.announceSuccess("Borrow request approved.");
       await load();
     } catch (e) {
-      alert(e?.response?.data?.error || e?.message || "Approve failed.");
+      const msg = e?.response?.data?.error || e?.message || "Approve failed.";
+      voiceAccessibility.announceError(msg);
+      alert(msg);
     }
   }
 
@@ -53,9 +61,12 @@ export default function BorrowPendingPage() {
     if (!confirm("Decline this borrow request?")) return;
     try {
       await apiDeclineBorrow(id, reason);
+      voiceAccessibility.announceSuccess("Borrow request declined.");
       await load();
     } catch (e) {
-      alert(e?.response?.data?.error || e?.message || "Decline failed.");
+      const msg = e?.response?.data?.error || e?.message || "Decline failed.";
+      voiceAccessibility.announceError(msg);
+      alert(msg);
     }
   }
 
@@ -73,9 +84,12 @@ export default function BorrowPendingPage() {
         await apiApproveBorrow(id);
       }
       setSelectedIds(new Set());
+      voiceAccessibility.announceSuccess(`${selectedIds.size} borrow request(s) approved.`);
       await load();
     } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "Bulk approve failed");
+      const msg = e?.response?.data?.error || e?.message || "Bulk approve failed";
+      voiceAccessibility.announceError(msg);
+      setErr(msg);
       setLoading(false);
     }
   }

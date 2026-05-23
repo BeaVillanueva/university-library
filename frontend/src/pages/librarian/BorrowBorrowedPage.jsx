@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
+import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import Pagination from "../../components/Pagination.jsx";
 import { apiListAllBorrows, apiReturnBorrow } from "../../api/borrow.js";
 
@@ -31,6 +33,8 @@ export default function BorrowBorrowedPage() {
     }),
     [page, q]
   );
+
+    useVoiceAnnouncements('BORROW_BORROWED');
 
   async function load() {
     setLoading(true);
@@ -79,6 +83,7 @@ export default function BorrowBorrowedPage() {
     try {
       await apiReturnBorrow(id);
       setSuccess("Book returned successfully.");
+      voiceAccessibility.announceSuccess("Book returned successfully.");
       await load();
     } catch (e) {
       setErr(e?.response?.data?.error || e?.message || "Return failed.");

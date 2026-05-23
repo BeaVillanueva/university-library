@@ -10,6 +10,8 @@ import {
   apiDeclineUser
 } from "../../api/users";
 import Pagination from "../../components/Pagination";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
+import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import Alert from "../../components/Alert";
 
 const IMUS_COURSES = [
@@ -49,6 +51,9 @@ function pathFromTab(tab) {
 }
 
 export default function AdminUsersPage() {
+  // ✅ Announce page load
+  useVoiceAnnouncements('ADMIN_USERS');
+
   const loc = useLocation();
   const nav = useNavigate();
 
@@ -143,6 +148,7 @@ export default function AdminUsersPage() {
 
     try {
       await apiCreateUser(payload);
+            voiceAccessibility.announceSuccess(`User ${form.email} created successfully.`);
       setNotice("User created.");
       setForm({
         name: "",
@@ -155,7 +161,9 @@ export default function AdminUsersPage() {
 
       nav("/app/admin/users", { replace: true });
     } catch (e2) {
-      setError(e2?.response?.data?.error || e2?.message || "Create failed");
+      const msg = e2?.response?.data?.error || e2?.message || "Create failed";
+      voiceAccessibility.announceError(msg);
+      setError(msg);
     }
   }
 
@@ -238,10 +246,12 @@ export default function AdminUsersPage() {
     setNotice("");
     try {
       await apiDeleteUser(id);
+      voiceAccessibility.announceSuccess("User deleted successfully.");
       setNotice("User deleted successfully.");
       await loadUsers();
     } catch (e) {
       const errorMsg = e?.response?.data?.error || e?.message || "Delete failed";
+      voiceAccessibility.announceError(errorMsg);
       setError(errorMsg);
     } finally {
       setWorkingId(null);

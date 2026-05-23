@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import Pagination from "../../components/Pagination.jsx";
 import { apiListAllBorrows } from "../../api/borrow.js";
 
@@ -8,6 +9,8 @@ function fmt(s) {
 }
 
 export default function BorrowAllHistoryPage() {
+    useVoiceAnnouncements('BORROW_ALL_HISTORY');
+
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);

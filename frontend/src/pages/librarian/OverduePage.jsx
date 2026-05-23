@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { apiListAllBorrows } from "../../api/borrow";
 import Pagination from "../../components/Pagination";
 import Alert from "../../components/Alert";
 
 export default function OverduePage() {
+    useVoiceAnnouncements('LIBRARIAN_OVERDUE');
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
