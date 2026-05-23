@@ -64,6 +64,9 @@ require_once __DIR__ . '/../src/Controllers/ReportsController.php';
 require_once __DIR__ . '/../src/Utils/Text.php';
 require_once __DIR__ . '/../src/Utils/Mailer.php';
 
+require_once __DIR__ . '/../src/Controllers/AnnouncementController.php';
+require_once __DIR__ . '/../src/Controllers/UserPreferencesController.php';
+
 
 $config = require __DIR__ . '/../config/config.php';
 Cors::handle($config['cors'] ?? []);
@@ -255,6 +258,33 @@ $router->add('GET', '/reports/student-stats', function () use ($config) {
 });
 
 /**
+ * Announcements
+ */
+$router->add('GET', '/announcements', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AnnouncementController::list(pdo($config), $auth);
+});
+
+$router->add('POST', '/announcements', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AnnouncementController::create(pdo($config), $auth);
+});
+
+/**
+ * User Preferences
+ */
+$router->add('GET', '/preferences', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  UserPreferencesController::get(pdo($config), $auth);
+});
+
+$router->add('PUT', '/preferences', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  UserPreferencesController::update(pdo($config), $auth);
+});
+
+
+/**
  * Users
  */
 $router->add('GET', '/users', function () use ($config) {
@@ -312,6 +342,13 @@ if (in_array($method, ['PUT','PATCH'], true)) {
     UsersController::update(pdo($config), $auth, $id2);
     exit;
   }
+
+  $aid = Path::matchId($path, '/announcements/');
+  if ($aid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AnnouncementController::update(pdo($config), $auth, $aid);
+    exit;
+  }
 }
 
 /**
@@ -331,6 +368,13 @@ if ($method === 'DELETE') {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['admin']);
     CategoriesController::delete(pdo($config), $cid);
+    exit;
+  }
+
+  $aid = Path::matchId($path, '/announcements/');
+  if ($aid !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AnnouncementController::delete(pdo($config), $auth, $aid);
     exit;
   }
 }
