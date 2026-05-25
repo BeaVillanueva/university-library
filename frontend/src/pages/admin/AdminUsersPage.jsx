@@ -64,6 +64,7 @@ export default function AdminUsersPage() {
   const [selectedPendingIds, setSelectedPendingIds] = useState(new Set());
 
   const [q, setQ] = useState("");
+  const [pendingSearch, setPendingSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -84,6 +85,24 @@ export default function AdminUsersPage() {
 
   const isStudentForm = form.role === "student";
   const courseOptions = useMemo(() => IMUS_COURSES, []);
+
+  const filteredPending = useMemo(() => {
+  const search = pendingSearch.trim().toLowerCase();
+
+    if (!search) return pending;
+
+    return pending.filter((p) =>
+      [
+        p.name,
+        p.email,
+        p.student_number,
+        p.department,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(search)
+    );
+  }, [pending, pendingSearch]);
 
   useEffect(() => {
     const next = tabFromPath(loc.pathname);
@@ -304,117 +323,184 @@ export default function AdminUsersPage() {
 
       {/* PENDING TAB */}
       {tab === "pending" ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm a11y-surface a11y-outline">
-          <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-            <div className="text-sm font-semibold">
-              {selectedPendingIds.size > 0 && (
-                <span className="text-emerald-600">{selectedPendingIds.size} selected</span>
-              )}
-              {selectedPendingIds.size === 0 && <span>Pending Student Approvals</span>}
+        <>
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="w-full sm:max-w-md">
+              <label className="text-xs font-semibold text-slate-500">
+                Search pending students
+              </label>
+
+              <input
+                type="text"
+                value={pendingSearch}
+                onChange={(e) => {
+                  setPendingSearch(e.target.value);
+                  setSelectedPendingIds(new Set());
+                }}
+                placeholder="Search name, email, student number, or course..."
+                className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+              />
             </div>
-            <div className="flex gap-2">
-              {selectedPendingIds.size > 0 && (
-                <button
-                  type="button"
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 shadow-sm"
-                  onClick={bulkApprovePending}
-                  disabled={loading}
-                >
-                  Approve Selected ({selectedPendingIds.size})
-                </button>
-              )}
-              <button
-                type="button"
-                className="text-xs rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50 shadow-sm"
-                onClick={loadPending}
-              >
-                Refresh
-              </button>
+
+            <div className="text-sm text-slate-500">
+              Showing{" "}
+              <span className="font-semibold text-slate-800">
+                {filteredPending.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-slate-800">
+                {pending.length}
+              </span>
             </div>
           </div>
 
-          {loading ? (
-            <div className="p-4 text-sm text-slate-600 a11y-muted">Loading…</div>
-          ) : pending.length === 0 ? (
-            <div className="p-4 text-sm text-slate-600 a11y-muted">
-              No pending students.
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm a11y-surface a11y-outline">
+            <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+              <div className="text-sm font-semibold">
+                {selectedPendingIds.size > 0 ? (
+                  <span className="text-emerald-600">
+                    {selectedPendingIds.size} selected
+                  </span>
+                ) : (
+                  <span>Pending Student Approvals</span>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                {selectedPendingIds.size > 0 && (
+                  <button
+                    type="button"
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 shadow-sm"
+                    onClick={bulkApprovePending}
+                    disabled={loading}
+                  >
+                    Approve Selected ({selectedPendingIds.size})
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="text-xs rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50 shadow-sm"
+                  onClick={loadPending}
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedPendingIds.size === pending.length && pending.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPendingIds(new Set(pending.map(p => p.id)));
-                          } else {
-                            setSelectedPendingIds(new Set());
-                          }
-                        }}
-                        aria-label="Select all pending students"
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Student #</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Department</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {pending.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
+
+            {loading ? (
+              <div className="p-4 text-sm text-slate-600 a11y-muted">
+                Loading…
+              </div>
+            ) : filteredPending.length === 0 ? (
+              <div className="p-4 text-sm text-slate-600 a11y-muted">
+                No pending students.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">
                         <input
                           type="checkbox"
-                          checked={selectedPendingIds.has(p.id)}
+                          checked={
+                            selectedPendingIds.size === filteredPending.length &&
+                            filteredPending.length > 0
+                          }
                           onChange={(e) => {
-                            const newSet = new Set(selectedPendingIds);
                             if (e.target.checked) {
-                              newSet.add(p.id);
+                              setSelectedPendingIds(
+                                new Set(filteredPending.map((p) => p.id))
+                              );
                             } else {
-                              newSet.delete(p.id);
+                              setSelectedPendingIds(new Set());
                             }
-                            setSelectedPendingIds(newSet);
                           }}
-                          aria-label={`Select ${p.name}`}
+                          aria-label="Select all pending students"
                         />
-                      </td>
-                      <td className="px-4 py-3 font-medium">{p.name}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{p.email}</td>
-                      <td className="px-4 py-3 text-xs">{p.student_number || "—"}</td>
-                      <td className="px-4 py-3 text-xs">{p.department || "—"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 shadow-sm"
-                            onClick={() => approve(p.id)}
-                            disabled={workingId === p.id}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60 shadow-sm"
-                            onClick={() => decline(p.id)}
-                            disabled={workingId === p.id}
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      </td>
+                      </th>
+
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                        Email
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                        Student #
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                        Department
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredPending.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedPendingIds.has(p.id)}
+                            onChange={(e) => {
+                              const newSet = new Set(selectedPendingIds);
+
+                              if (e.target.checked) {
+                                newSet.add(p.id);
+                              } else {
+                                newSet.delete(p.id);
+                              }
+
+                              setSelectedPendingIds(newSet);
+                            }}
+                            aria-label={`Select ${p.name}`}
+                          />
+                        </td>
+
+                        <td className="px-4 py-3 font-medium">{p.name}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {p.email}
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          {p.student_number || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          {p.department || "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60 shadow-sm"
+                              onClick={() => approve(p.id)}
+                              disabled={workingId === p.id}
+                            >
+                              Approve
+                            </button>
+
+                            <button
+                              type="button"
+                              className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60 shadow-sm"
+                              onClick={() => decline(p.id)}
+                              disabled={workingId === p.id}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       ) : null}
 
       {/* ALL USERS TAB */}
