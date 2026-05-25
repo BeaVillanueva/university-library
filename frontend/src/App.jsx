@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import { startIdleLogout } from "./utils/idleLogout.js";
 
-
 import LandingPage from "./pages/LandingPage.jsx";
 import ConfigPage from "./pages/ConfigPage.jsx";
 
@@ -45,25 +44,15 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Public: Landing (default page) */}
       <Route path="/" element={<LandingPage />} />
-
-      {/* Configuration page - for mobile/different devices */}
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/config" element={<ConfigPage />} />
 
-      {/* Public: Auth routes */}
-      <Route path="/login" element={<LoginPage />} />
-
-      {/* Public: Auth routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterStudentPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Optional backward-compat: keep /landing working */}
-      <Route path="/landing" element={<LandingPage />} />
-
-      {/* Protected App routes (moved under /app) */}
       <Route
         path="/app"
         element={
@@ -73,10 +62,8 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-
         <Route path="books" element={<BooksPage />} />
-        
-        {/* ✅ ADD NEW: Create book with cover upload */}
+
         <Route
           path="books/create"
           element={
@@ -86,7 +73,6 @@ export default function App() {
           }
         />
 
-        {/* ✅ EDIT: Must be AFTER /create route */}
         <Route
           path="books/:id/edit"
           element={
@@ -98,7 +84,6 @@ export default function App() {
 
         <Route path="my/borrows" element={<MyBorrowsPage />} />
 
-        {/* Librarian-only */}
         <Route
           path="librarian/import"
           element={
@@ -108,7 +93,6 @@ export default function App() {
           }
         />
 
-        {/* Backward-compatible redirects (inside /app) */}
         <Route
           path="librarian/borrows"
           element={<Navigate to="/app/librarian/borrowing/borrowed" replace />}
@@ -118,7 +102,6 @@ export default function App() {
           element={<Navigate to="/app/librarian/borrowing/overdue" replace />}
         />
 
-        {/* Borrowing submenu pages (Librarian-only) */}
         <Route
           path="librarian/borrowing/pending"
           element={
@@ -155,7 +138,6 @@ export default function App() {
           }
         />
 
-        {/* Admin users */}
         <Route
           path="admin/users"
           element={
@@ -190,7 +172,6 @@ export default function App() {
           }
         />
 
-        {/* Admin + Librarian can access Reports */}
         <Route
           path="admin/reports"
           element={
@@ -201,10 +182,8 @@ export default function App() {
         />
 
         <Route path="settings" element={<SettingsPage />} />
-
         <Route path="announcements" element={<AnnouncementPage />} />
 
-        {/* Dev page: librarian-only */}
         <Route
           path="dev"
           element={
@@ -214,7 +193,6 @@ export default function App() {
           }
         />
 
-        {/* Activity logs: admin + librarian */}
         <Route
           path="activity-logs"
           element={

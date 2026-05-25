@@ -597,6 +597,10 @@ final class BorrowController {
     if ($status !== '') {
       if ($status === 'pending') {
         $where[] = "(br.status = 'pending' OR br.status IS NULL OR br.status = '')";
+      } else if ($status === 'active') {
+        // ✅ borrowed + overdue + not returned
+        $where[] = "br.return_date IS NULL";
+        $where[] = "br.status IN ('borrowed','overdue')";
       } else {
         $where[] = "br.status = ?";
         $params[] = $status;
@@ -619,6 +623,10 @@ final class BorrowController {
       $params[] = $like;
       $params[] = $like;
       $params[] = $like;
+    }
+
+    if ($status === 'borrowed' || $status === 'overdue') {
+      $where[] = "br.return_date IS NULL";
     }
 
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';

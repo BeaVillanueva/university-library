@@ -9,6 +9,26 @@ function fmt(s) {
   return String(s);
 }
 
+// ✅ NEW: format "YYYY-MM-DD HH:MM:SS" -> "HH:MM"
+function fmtTimeFromTimestamp(ts) {
+  if (!ts) return "—";
+  const str = String(ts);
+  const timePart = str.includes(" ") ? str.split(" ")[1] : str; // "HH:MM:SS"
+  const hhmm = timePart ? timePart.slice(0, 5) : "";
+  if (!hhmm || !hhmm.includes(":")) return "—";
+
+  let [hh, mm] = hhmm.split(":").map((x) => parseInt(x, 10));
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return "—";
+
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  if (hh === 0) hh = 12;
+
+  const hhStr = String(hh).padStart(2, "0");
+  const mmStr = String(mm).padStart(2, "0");
+  return `${hhStr}:${mmStr} ${ampm}`;
+}
+
 export default function BorrowBorrowedPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -24,9 +44,10 @@ export default function BorrowBorrowedPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isReturning, setIsReturning] = useState(false);
 
+  // ✅ status=active => borrowed + overdue (return_date IS NULL)
   const params = useMemo(
     () => ({
-      status: "borrowed",
+      status: "active",
       page,
       limit: 10,
       q: q.trim() || undefined
@@ -34,7 +55,7 @@ export default function BorrowBorrowedPage() {
     [page, q]
   );
 
-    useVoiceAnnouncements('BORROW_BORROWED');
+  useVoiceAnnouncements("BORROW_BORROWED");
 
   async function load() {
     setLoading(true);
@@ -60,21 +81,15 @@ export default function BorrowBorrowedPage() {
   // Toggle single item
   function toggleItem(id) {
     const newSet = new Set(selectedIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
     setSelectedIds(newSet);
   }
 
   // Toggle all items on current page
   function toggleAll() {
-    if (selectedIds.size === items.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map((item) => item.id)));
-    }
+    if (selectedIds.size === items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((item) => item.id)));
   }
 
   // Return single book
@@ -207,7 +222,6 @@ export default function BorrowBorrowedPage() {
                 id="selectAll"
                 className="w-5 h-5 rounded cursor-pointer"
                 checked={selectedIds.size === items.length && items.length > 0}
-                indeterminate={selectedIds.size > 0 && selectedIds.size < items.length}
                 onChange={toggleAll}
                 aria-label="Select all books on this page"
               />
@@ -224,14 +238,7 @@ export default function BorrowBorrowedPage() {
                 disabled={isReturning}
                 aria-label={`Return ${selectedIds.size} selected book(s)`}
               >
-                {isReturning ? (
-                  <>
-                    <span className="inline-block animate-spin mr-2">⏳</span>
-                    Returning…
-                  </>
-                ) : (
-                  `Return Selected (${selectedIds.size})`
-                )}
+                {isReturning ? "Returning…" : `Return Selected (${selectedIds.size})`}
               </button>
             )}
           </div>
@@ -268,6 +275,7 @@ export default function BorrowBorrowedPage() {
                 <th className="px-4 py-3">Student No</th>
                 <th className="px-4 py-3">Book</th>
                 <th className="px-4 py-3">Borrow</th>
+                <th className="px-4 py-3">Time</th>
                 <th className="px-4 py-3">Due</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
@@ -276,13 +284,13 @@ export default function BorrowBorrowedPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600" colSpan={7}>
+                  <td className="px-4 py-4 text-slate-600" colSpan={8}>
                     Loading…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600" colSpan={7}>
+                  <td className="px-4 py-4 text-slate-600" colSpan={8}>
                     No borrowed books.
                   </td>
                 </tr>
@@ -290,9 +298,7 @@ export default function BorrowBorrowedPage() {
                 items.map((r) => (
                   <tr
                     key={r.id}
-                    className={`bg-white transition-colors ${
-                      selectedIds.has(r.id) ? "bg-blue-50" : ""
-                    }`}
+                    className={`transition-colors ${selectedIds.has(r.id) ? "bg-blue-50" : "bg-white"}`}
                   >
                     <td className="px-4 py-4">
                       <input
@@ -310,9 +316,7 @@ export default function BorrowBorrowedPage() {
                     </td>
 
                     <td className="px-4 py-4">
-                      <div className="font-mono text-xs text-slate-800">
-                        {fmt(r.user_student_number)}
-                      </div>
+                      <div className="font-mono text-xs text-slate-800">{fmt(r.user_student_number)}</div>
                     </td>
 
                     <td className="px-4 py-4">
@@ -321,7 +325,24 @@ export default function BorrowBorrowedPage() {
                     </td>
 
                     <td className="px-4 py-4">{fmt(r.borrow_date)}</td>
-                    <td className="px-4 py-4">{fmt(r.due_date)}</td>
+
+                    {/* ✅ NEW: Borrow time from created_at (needs DB column created_at) */}
+                    <td className="px-4 py-4">
+                      <div className="text-slate-800">
+                        {r.created_at ? fmtTimeFromTimestamp(r.created_at) : "—"}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <span>{fmt(r.due_date)}</span>
+                        {String(r.status || "").toLowerCase() === "overdue" ? (
+                          <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                            OVERDUE
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
 
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">

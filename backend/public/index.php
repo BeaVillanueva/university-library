@@ -72,11 +72,11 @@ require_once __DIR__ . '/../src/Controllers/UserPreferencesController.php';
 $config = require __DIR__ . '/../config/config.php';
 Cors::handle($config['cors'] ?? []);
 
-// try {
-//     OverdueService::refresh(pdo($config), $config);
-// } catch (Throwable $e) {
-//     error_log($e->getMessage());
-// }
+try {
+    OverdueService::refresh(pdo($config), $config);
+} catch (Throwable $e) {
+    error_log($e->getMessage());
+}
 
 $router = new Router();
 
