@@ -287,7 +287,7 @@ export default function ImportBooksPage() {
           <div>
             <div className="text-sm font-semibold">Manual Add (Single Book)</div>
             <div className="text-xs text-slate-500 a11y-muted">
-              Adds one book directly (keeps bulk import available below).
+              Adds one book directly
             </div>
           </div>
 
@@ -306,19 +306,32 @@ export default function ImportBooksPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 a11y-surface a11y-outline">
               <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
 
-              <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="mb-4 h-[520px] w-full rounded-2xl bg-slate-100 flex items-center justify-center overflow-hidden">
+
                 {coverPreview ? (
                   <img
                     src={coverPreview}
                     alt="Cover preview"
-                    className="w-full h-full object-cover"
+                    className="
+                      max-h-full
+                      max-w-full
+                      object-contain
+                    "
                   />
                 ) : (
                   <div className="text-slate-400 text-center">
-                    <div className="text-5xl">📖</div>
-                    <p className="text-sm mt-2">No Cover</p>
+
+                    <div className="text-7xl">
+                      📖
+                    </div>
+
+                    <p className="mt-4 text-base">
+                      No Cover
+                    </p>
+
                   </div>
                 )}
+
               </div>
 
               <div>
