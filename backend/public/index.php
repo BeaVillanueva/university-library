@@ -48,6 +48,7 @@ require_once __DIR__ . '/../src/Utils/Query.php';
 require_once __DIR__ . '/../src/Utils/Path.php';
 require_once __DIR__ . '/../src/Utils/Csv.php';
 
+require_once __DIR__ . '/../src/Services/EmailService.php';
 require_once __DIR__ . '/../src/Services/OverdueService.php';
 
 require_once __DIR__ . '/../src/ActivityLogger.php';
@@ -70,6 +71,12 @@ require_once __DIR__ . '/../src/Controllers/UserPreferencesController.php';
 
 $config = require __DIR__ . '/../config/config.php';
 Cors::handle($config['cors'] ?? []);
+
+// try {
+//     OverdueService::refresh(pdo($config), $config);
+// } catch (Throwable $e) {
+//     error_log($e->getMessage());
+// }
 
 $router = new Router();
 

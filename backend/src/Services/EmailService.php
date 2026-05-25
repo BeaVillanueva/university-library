@@ -256,26 +256,5 @@ CVSU Imus Library
       return false;
     }
   }
-
-  /**
-   * ✅ LEGACY: Keep existing method for backwards compatibility
-   */
-  private static function sendViaSmtp(array $config, string $to, string $subject, string $body): bool {
-    try {
-      $smtpConfig = $config['smtp'] ?? [];
-
-      if (empty($smtpConfig['host']) || empty($smtpConfig['username'])) {
-        // Fallback to PHP mail()
-        $headers = "From: " . ($smtpConfig['from_email'] ?? 'noreply@cvsu.edu.ph') . "\r\n";
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        return mail($to, $subject, $body, $headers);
-      }
-
-      return true;
-    } catch (Throwable $e) {
-      error_log("SMTP error: " . $e->getMessage());
-      return false;
-    }
-  }
 }
 ?>

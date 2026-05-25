@@ -13,6 +13,7 @@ import {
 import { apiListBooks } from "../api/books";
 import { loadA11yPrefs, saveA11yPrefs, DEFAULT_A11Y, applyA11yPrefs } from "../state/a11yPrefs";
 import { voiceReaderService } from "../services/VoiceReaderService";
+import { announceAction } from "../hooks/useVoiceGuide";
 
 export default function LandingPage() {
   const nav = useNavigate();
@@ -37,10 +38,59 @@ export default function LandingPage() {
 
   // ✅ Load accessibility preferences on mount
   useEffect(() => {
-    const savedPrefs = loadA11yPrefs('guest');
+    const savedPrefs = loadA11yPrefs("guest");
+
     setPrefs(savedPrefs);
     applyA11yPrefs(savedPrefs);
+
     voiceReaderService.init(savedPrefs.voiceReader);
+
+    if (savedPrefs.voiceReader) {
+      voiceReaderService.speak(
+        "Welcome to Cavite State University Library System."
+      );
+    }
+
+    const handler = (e) => {
+      if (!voiceReaderService.getEnabled()) return;
+
+      const el = e.target.closest(
+        "button,a,input,[role='button']"
+      );
+
+      if (!el) return;
+
+      const label =
+        el.getAttribute("aria-label") ||
+        el.innerText ||
+        el.textContent ||
+        el.placeholder ||
+        "";
+
+      if (!label) return;
+
+      if (
+        voiceReaderService.shouldAnnounce(
+          label.toLowerCase()
+        )
+      ) {
+        voiceReaderService.queueAnnouncement(
+          `${label} selected`
+        );
+      }
+    };
+
+    document.addEventListener(
+      "click",
+      handler
+    );
+
+    return () => {
+      document.removeEventListener(
+        "click",
+        handler
+      );
+    };
   }, []);
 
   // ✅ Load featured books from API
@@ -159,25 +209,25 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <NavLink
-              to="/login"
-              className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/15"
-            >
+            <NavLink to="/login" aria-label="Login"   className="rounded-xl bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/15">
               Login
             </NavLink>
-            <NavLink
-              to="/register"
-              className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-extrabold text-slate-900 hover:bg-amber-300"
-            >
+            <NavLink to="/register" aria-label="Register" className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-extrabold text-slate-900 hover:bg-amber-300">
               Register
             </NavLink>
             
             {/* ✅ Settings icon moved to the end */}
             <button
-              onClick={() => setShowA11yModal(true)}
-              className="rounded-lg p-2 hover:bg-white/15 transition text-white"
-              title="Accessibility Settings"
-              aria-label="Open accessibility settings"
+              aria-label="Open Accessibility Settings"
+              onClick={() => {
+              setShowA11yModal(true);
+
+              if (voiceReaderService.getEnabled()) {
+              voiceReaderService.speak(
+              "Accessibility settings opened"
+              );
+              }
+              }}
             >
               <FiSettings className="text-xl" />
             </button>
@@ -342,9 +392,8 @@ export default function LandingPage() {
 
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                     <button
-                      onClick={onExploreBooks}
+                      aria-label="Explore Books" onClick={onExploreBooks}
                       className="rounded-full bg-[#1b5e20] px-5 py-2 text-sm font-extrabold text-white hover:bg-[#1f6a24]"
-                      type="button"
                     >
                       Explore Books
                     </button>
