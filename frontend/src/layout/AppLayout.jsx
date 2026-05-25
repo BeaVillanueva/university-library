@@ -5,8 +5,8 @@ import { useUi } from "../state/UiContext";
 import { http } from "../api/http";
 import { apiListPendingStudents } from "../api/users";
 import { apiListAllBorrows } from "../api/borrow";
-import { useIdleTimer } from "../hooks/useIdleTimer";
 import { apiListAnnouncements } from "../api/announcements";
+import { useIdleTimer } from "../hooks/useIdleTimer";
 import {
   FiHome,
   FiUsers,
@@ -21,16 +21,23 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiLogOut,
-  FiUser
+  FiUser,
 } from "react-icons/fi";
 
 const LS_SIDEBAR_COLLAPSED = "ulms_sidebar_collapsed";
 const ICON_ACCENT = "text-[#d6a436]";
 
-function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false }) {
+function LinkItem({
+  to,
+  label,
+  icon: Icon,
+  onNavigate,
+  collapsed,
+  end = false,
+  badge,
+}) {
   const base =
-    "group relative flex items-center text-sm font-semibold transition " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-11";
+    "group relative flex items-center text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-11";
 
   const normal = "rounded-2xl text-white/85 hover:bg-white/10";
   const active =
@@ -43,7 +50,9 @@ function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false })
       to={to}
       end={end}
       onClick={onNavigate}
-      className={({ isActive }) => [base, layout, isActive ? active : normal].join(" ")}
+      className={({ isActive }) =>
+        [base, layout, isActive ? active : normal].join(" ")
+      }
       aria-label={label}
       title={collapsed ? label : undefined}
     >
@@ -53,20 +62,26 @@ function LinkItem({ to, label, icon: Icon, onNavigate, collapsed, end = false })
           className={[
             "shrink-0 opacity-95 group-hover:opacity-100",
             "group-[[aria-current=page]]:text-[#2f4f4c]",
-            ICON_ACCENT
+            ICON_ACCENT,
           ].join(" ")}
           aria-hidden="true"
         />
       ) : null}
+
       <span className={collapsed ? "hidden" : "truncate"}>{label}</span>
+
+      {!collapsed && badge > 0 ? (
+        <span className="ml-auto min-w-[26px] rounded-full bg-[#d6a436] px-2 py-[2px] text-center text-xs font-bold text-[#2f4f4c] shadow-sm">
+          {badge}
+        </span>
+      ) : null}
     </NavLink>
   );
 }
 
 function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
   const base =
-    "group relative flex items-center justify-between gap-3 text-sm transition " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-10";
+    "group relative flex items-center justify-between gap-3 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 h-10";
 
   const normal = "rounded-2xl text-white/75 hover:bg-white/10";
   const active =
@@ -83,7 +98,7 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
         [
           base,
           collapsed ? "px-0 justify-center" : "px-4 pl-12",
-          isActive ? active : normal
+          isActive ? active : normal,
         ].join(" ")
       }
       aria-label={label}
@@ -92,10 +107,7 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
       <span className={collapsed ? "hidden" : "truncate"}>{label}</span>
 
       {showBadge ? (
-        <span
-          className="min-w-[28px] rounded-full bg-rose-600 px-2 py-[2px] text-center text-xs font-bold text-white shadow-sm ring-1 ring-white/15"
-          aria-label={`${label} count ${badge}`}
-        >
+        <span className="min-w-[28px] rounded-full bg-[#d6a436] px-2 py-[2px] text-center text-xs font-bold text-[#2f4f4c] shadow-sm ring-1 ring-white/15">
           {badge}
         </span>
       ) : null}
@@ -123,7 +135,6 @@ export default function AppLayout() {
   const isLibrarian = role === "librarian";
   const isStudent = role === "student";
 
-  // ✅ updated for /app prefix
   const [usersOpen, setUsersOpen] = useState(() =>
     loc.pathname.startsWith("/app/admin/users")
   );
@@ -131,13 +142,14 @@ export default function AppLayout() {
 
   const [pendingBorrowsCount, setPendingBorrowsCount] = useState(0);
 
-  // ✅ updated for /app prefix
   const [borrowingOpen, setBorrowingOpen] = useState(() =>
     loc.pathname.startsWith("/app/librarian/borrowing")
   );
 
   useEffect(() => {
-    if (loc.pathname.startsWith("/app/librarian/borrowing")) setBorrowingOpen(true);
+    if (loc.pathname.startsWith("/app/librarian/borrowing")) {
+      setBorrowingOpen(true);
+    }
   }, [loc.pathname]);
 
   useEffect(() => {
@@ -145,7 +157,9 @@ export default function AppLayout() {
   }, [collapsed]);
 
   useEffect(() => {
-    if (loc.pathname.startsWith("/app/admin/users")) setUsersOpen(true);
+    if (loc.pathname.startsWith("/app/admin/users")) {
+      setUsersOpen(true);
+    }
   }, [loc.pathname]);
 
   async function handleLogout() {
@@ -159,9 +173,7 @@ export default function AppLayout() {
     }
   }
 
-  // ✅ IDLE TIMEOUT - 30 minutes (1800000ms)
   const handleIdleTimeout = async () => {
-    console.log('[IDLE TIMEOUT] Logging out due to inactivity...');
     try {
       await http.post("/auth/logout", {});
     } catch {
@@ -172,7 +184,6 @@ export default function AppLayout() {
     }
   };
 
-  // 5 minutes = 300000ms
   useIdleTimer(handleIdleTimeout, 5 * 60 * 1000);
 
   function onNavigate() {
@@ -184,9 +195,11 @@ export default function AppLayout() {
 
     async function loadPendingCount() {
       if (!isAdmin) return;
+
       try {
         const res = await apiListPendingStudents();
         const count = Array.isArray(res?.items) ? res.items.length : 0;
+
         if (!cancelled) setPendingCount(count);
       } catch {
         if (!cancelled) setPendingCount(0);
@@ -209,7 +222,11 @@ export default function AppLayout() {
       if (!isLibrarian) return;
 
       try {
-        const res = await apiListAllBorrows({ status: "pending", page: 1, limit: 1 });
+        const res = await apiListAllBorrows({
+          status: "pending",
+          page: 1,
+          limit: 1,
+        });
 
         const total =
           typeof res?.total === "number"
@@ -237,6 +254,11 @@ export default function AppLayout() {
     let cancelled = false;
 
     async function loadAnnouncementCount() {
+      if (!isStudent) {
+        setAnnouncementCount(0);
+        return;
+      }
+
       try {
         const res = await apiListAnnouncements();
 
@@ -244,54 +266,31 @@ export default function AppLayout() {
           ? res.announcements
           : [];
 
-        const activeItems = items.filter(
-          (a) => a.status === "active"
-        );
+        const activeItems = items.filter((a) => a.status === "active");
 
-        const lastSeen =
-          localStorage.getItem(
-            "last_seen_announcements"
-          );
+        const lastSeen = localStorage.getItem("last_seen_announcements");
 
-        const newItems =
-          activeItems.filter((a) => {
-            const date =
-              a.updated_at ||
-              a.created_at;
-
-            return (
-              !lastSeen ||
-              new Date(date) >
-                new Date(lastSeen)
-            );
-          });
+        const newItems = activeItems.filter((a) => {
+          const date = a.updated_at || a.created_at;
+          return !lastSeen || new Date(date) > new Date(lastSeen);
+        });
 
         if (!cancelled) {
-          setAnnouncementCount(
-            newItems.length
-          );
+          setAnnouncementCount(newItems.length);
         }
-
       } catch {
-        if (!cancelled) {
-          setAnnouncementCount(0);
-        }
+        if (!cancelled) setAnnouncementCount(0);
       }
     }
 
     loadAnnouncementCount();
-
-    const t = setInterval(
-      loadAnnouncementCount,
-      30000
-    );
+    const t = setInterval(loadAnnouncementCount, 30000);
 
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-
-  }, []);
+  }, [isStudent]);
 
   const appBg = a11yMode ? "bg-slate-950" : "bg-[#e9eff0]";
 
@@ -303,7 +302,6 @@ export default function AppLayout() {
 
   return (
     <div className={["min-h-screen w-full", appBg].join(" ")}>
-      {/* Mobile top bar */}
       <header className="lg:hidden sticky top-0 z-30 border-b border-black/10 bg-white/90 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
           <button
@@ -324,7 +322,7 @@ export default function AppLayout() {
           className={[
             collapsed ? "w-[90px]" : "w-[300px]",
             "shrink-0 h-screen sticky top-0",
-            open ? "block" : "hidden lg:block"
+            open ? "block" : "hidden lg:block",
           ].join(" ")}
           aria-label="Sidebar navigation"
         >
@@ -333,7 +331,6 @@ export default function AppLayout() {
             onClick={onSidebarBackgroundClick}
             role="presentation"
           >
-            {/* Profile */}
             {collapsed ? (
               <div className="mt-1 flex items-center justify-center">
                 <button
@@ -343,7 +340,7 @@ export default function AppLayout() {
                   aria-label="Account settings"
                   title="Account"
                 >
-                  <FiUser size={20} className="text-white/90" aria-hidden="true" />
+                  <FiUser size={20} className="text-white/90" />
                 </button>
               </div>
             ) : (
@@ -362,7 +359,6 @@ export default function AppLayout() {
               </div>
             )}
 
-            {/* Navigation */}
             <nav className="mt-3 space-y-1 flex-1 overflow-hidden px-1">
               <LinkItem
                 to="/app"
@@ -373,71 +369,68 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
-              {isAdmin ? (
-                <>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setUsersOpen((v) => !v)}
+              {isAdmin && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setUsersOpen((v) => !v)}
+                    className={[
+                      "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition rounded-2xl h-11",
+                      loc.pathname.startsWith("/app/admin/users")
+                        ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
+                        : "text-white/85 hover:bg-white/10",
+                    ].join(" ")}
+                  >
+                    <span
                       className={[
-                        "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
-                        "rounded-2xl h-11",
-                        loc.pathname.startsWith("/app/admin/users")
-                          ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
-                          : "text-white/85 hover:bg-white/10"
+                        "flex items-center",
+                        collapsed ? "justify-center w-full" : "gap-3",
                       ].join(" ")}
-                      aria-label="Users submenu"
-                      aria-expanded={usersOpen}
-                      title={collapsed ? "Users" : undefined}
                     >
-                      <span
-                        className={[
-                          "flex items-center",
-                          collapsed ? "justify-center w-full" : "gap-3"
-                        ].join(" ")}
-                      >
-                        <FiUsers size={18} className={ICON_ACCENT} aria-hidden="true" />
-                        <span className={collapsed ? "hidden" : "truncate"}>Users</span>
+                      <FiUsers size={18} className={ICON_ACCENT} />
+                      <span className={collapsed ? "hidden" : "truncate"}>
+                        Users
                       </span>
+                    </span>
 
-                      {collapsed ? null : usersOpen ? (
-                        <FiChevronUp className="h-4 w-4" aria-hidden="true" />
+                    {!collapsed &&
+                      (usersOpen ? (
+                        <FiChevronUp className="h-4 w-4" />
                       ) : (
-                        <FiChevronDown className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </button>
+                        <FiChevronDown className="h-4 w-4" />
+                      ))}
+                  </button>
 
-                    {usersOpen && !collapsed ? (
-                      <div className="mt-1 space-y-1">
-                        <SubLinkItem
-                          to="/app/admin/users/pending"
-                          label="Pending Approval"
-                          onNavigate={onNavigate}
-                          collapsed={collapsed}
-                          end
-                          badge={pendingCount}
-                        />
-                        <SubLinkItem
-                          to="/app/admin/users"
-                          label="All Users"
-                          onNavigate={onNavigate}
-                          collapsed={collapsed}
-                          end
-                        />
-                        <SubLinkItem
-                          to="/app/admin/users/create"
-                          label="Create User"
-                          onNavigate={onNavigate}
-                          collapsed={collapsed}
-                          end
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </>
-              ) : null}
+                  {usersOpen && !collapsed && (
+                    <div className="mt-1 space-y-1">
+                      <SubLinkItem
+                        to="/app/admin/users/pending"
+                        label="Pending Approval"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                        badge={pendingCount}
+                      />
+                      <SubLinkItem
+                        to="/app/admin/users"
+                        label="All Users"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                      />
+                      <SubLinkItem
+                        to="/app/admin/users/create"
+                        label="Create User"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {(isAdmin || isLibrarian) ? (
+              {(isAdmin || isLibrarian) && (
                 <LinkItem
                   to="/app/admin/reports"
                   label="Reports"
@@ -445,9 +438,9 @@ export default function AppLayout() {
                   onNavigate={onNavigate}
                   collapsed={collapsed}
                 />
-              ) : null}
+              )}
 
-              {isLibrarian ? (
+              {isLibrarian && (
                 <>
                   <LinkItem
                     to="/app/librarian/import"
@@ -462,34 +455,33 @@ export default function AppLayout() {
                       type="button"
                       onClick={() => setBorrowingOpen((v) => !v)}
                       className={[
-                        "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition",
-                        "rounded-2xl h-11",
+                        "w-full flex items-center justify-between px-4 py-[10px] text-sm font-semibold transition rounded-2xl h-11",
                         loc.pathname.startsWith("/app/librarian/borrowing")
                           ? "bg-[#e9eff0] text-[#2f4f4c] shadow-sm ml-2 rounded-l-2xl rounded-r-[26px]"
-                          : "text-white/85 hover:bg-white/10"
+                          : "text-white/85 hover:bg-white/10",
                       ].join(" ")}
-                      aria-label="Borrowing submenu"
-                      aria-expanded={borrowingOpen}
-                      title={collapsed ? "Borrowing" : undefined}
                     >
                       <span
                         className={[
                           "flex items-center",
-                          collapsed ? "justify-center w-full" : "gap-3"
+                          collapsed ? "justify-center w-full" : "gap-3",
                         ].join(" ")}
                       >
-                        <FiRepeat size={18} className={ICON_ACCENT} aria-hidden="true" />
-                        <span className={collapsed ? "hidden" : "truncate"}>Borrowing</span>
+                        <FiRepeat size={18} className={ICON_ACCENT} />
+                        <span className={collapsed ? "hidden" : "truncate"}>
+                          Borrowing
+                        </span>
                       </span>
 
-                      {collapsed ? null : borrowingOpen ? (
-                        <FiChevronUp className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <FiChevronDown className="h-4 w-4" aria-hidden="true" />
-                      )}
+                      {!collapsed &&
+                        (borrowingOpen ? (
+                          <FiChevronUp className="h-4 w-4" />
+                        ) : (
+                          <FiChevronDown className="h-4 w-4" />
+                        ))}
                     </button>
 
-                    {borrowingOpen && !collapsed ? (
+                    {borrowingOpen && !collapsed && (
                       <div className="mt-1 space-y-1">
                         <SubLinkItem
                           to="/app/librarian/borrowing/pending"
@@ -521,10 +513,10 @@ export default function AppLayout() {
                           end
                         />
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </>
-              ) : null}
+              )}
 
               <LinkItem
                 to="/app/books"
@@ -539,19 +531,21 @@ export default function AppLayout() {
                 label="Announcements"
                 icon={FiBell}
                 onNavigate={() => {
-                  localStorage.setItem(
-                    "last_seen_announcements",
-                    new Date().toISOString()
-                  );
+                  if (isStudent) {
+                    localStorage.setItem(
+                      "last_seen_announcements",
+                      new Date().toISOString()
+                    );
+                    setAnnouncementCount(0);
+                  }
 
-                  setAnnouncementCount(0);
-
-                  onNavigate?.();
+                  onNavigate();
                 }}
                 collapsed={collapsed}
+                badge={isStudent ? announcementCount : null}
               />
 
-              {isStudent ? (
+              {isStudent && (
                 <LinkItem
                   to="/app/my/borrows"
                   label="My History"
@@ -559,7 +553,7 @@ export default function AppLayout() {
                   onNavigate={onNavigate}
                   collapsed={collapsed}
                 />
-              ) : null}
+              )}
 
               <LinkItem
                 to="/app/settings"
@@ -569,7 +563,7 @@ export default function AppLayout() {
                 collapsed={collapsed}
               />
 
-              {isAdmin || isLibrarian ? (
+              {(isAdmin || isLibrarian) && (
                 <LinkItem
                   to="/app/activity-logs"
                   label="Activity Logs"
@@ -577,7 +571,7 @@ export default function AppLayout() {
                   onNavigate={onNavigate}
                   collapsed={collapsed}
                 />
-              ) : null}
+              )}
             </nav>
 
             <div className="pt-3 shrink-0 space-y-4">
@@ -602,7 +596,9 @@ export default function AppLayout() {
 
                   <div>
                     <div className="font-serif text-lg leading-tight text-[#f7f4ea]">
-                      CAVITE STATE<br />UNIVERSITY
+                      CAVITE STATE
+                      <br />
+                      UNIVERSITY
                     </div>
                     <div className="mt-1 text-xs font-semibold text-[#d6a436]">
                       Truth. Integrity. Excellence. Service.
