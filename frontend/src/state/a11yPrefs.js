@@ -47,7 +47,17 @@ export function applyA11yPrefs(prefs) {
     prefs.theme === "dark" || (prefs.theme === "system" && systemPrefersDark());
   root.classList.toggle("dark", wantsDark);
 
+  // ✅ IMPROVED: High Contrast Mode
   root.classList.toggle("hc", prefs.contrast === "high");
+  
+  // Add inline styles for high contrast
+  if (prefs.contrast === "high") {
+    root.style.setProperty("--hc-border-width", "3px");
+    root.style.setProperty("--hc-text-weight", "700");
+  } else {
+    root.style.removeProperty("--hc-border-width");
+    root.style.removeProperty("--hc-text-weight");
+  }
 
   const sizeMap = { sm: "14px", md: "16px", lg: "18px", xl: "20px" };
   root.style.setProperty("--app-font-size", sizeMap[prefs.fontSize] || "16px");

@@ -169,7 +169,7 @@ export default function AppLayout() {
       // ignore
     } finally {
       logout();
-      nav("/login", { replace: true });
+      nav("/", { replace: true });
     }
   }
 

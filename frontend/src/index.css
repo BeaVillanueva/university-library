@@ -104,9 +104,12 @@ html.dyslexia-font {
 }
 
 /* =========================================================
-   HIGH CONTRAST MODE (html.hc)
-   Improves contrast WITHOUT forcing dark background
-   Works independently with any theme!
+   ✅ IMPROVED HIGH CONTRAST MODE (html.hc)
+   - Thicker borders (2-3px)
+   - Bolder text (font-weight 600-700)
+   - Stronger text colors (black/white)
+   - Works with ANY theme (light, dark, system)
+   - Doesn't force dark background (unlike old version)
    ========================================================= */
 
 /* Define high contrast color variables */
@@ -114,47 +117,96 @@ html.hc {
   --hc-text: #000;
   --hc-bg: #fff;
   --hc-border: #000;
+  --hc-border-width: 2px;
 }
 
-/* When high contrast + dark mode: adjust colors */
+/* When high contrast + dark mode: invert colors */
 html.hc.dark {
   --hc-text: #fff;
   --hc-bg: #000;
   --hc-border: #fff;
 }
 
-/* Apply stronger contrasts to common text elements */
+/* ✅ Stronger text colors in HC */
+html.hc p,
+html.hc span,
+html.hc div,
+html.hc label {
+  color: var(--hc-text) !important;
+  font-weight: 500 !important;
+}
+
 html.hc .text-slate-900,
 html.hc .text-slate-800,
 html.hc .text-slate-700,
 html.hc .text-slate-600,
 html.hc .text-slate-500,
+html.hc .text-slate-400,
+html.hc .text-slate-300,
+html.hc .text-slate-200,
+html.hc .text-slate-100,
 html.hc .a11y-muted {
   color: var(--hc-text) !important;
 }
 
-/* Stronger borders */
-html.hc .a11y-outline,
-html.hc .border-slate-200,
-html.hc .border-slate-300 {
-  border-color: var(--hc-border) !important;
-  border-width: 2px !important;
+/* ✅ Bolder headings in HC */
+html.hc h1,
+html.hc h2,
+html.hc h3,
+html.hc h4,
+html.hc h5,
+html.hc h6 {
+  color: var(--hc-text) !important;
+  font-weight: 700 !important;
 }
 
-/* Inputs with high contrast */
+/* ✅ Stronger borders in HC */
+html.hc .a11y-outline,
+html.hc .border,
+html.hc .border-slate-200,
+html.hc .border-slate-300,
+html.hc .border-slate-400,
+html.hc .border-b,
+html.hc .border-t,
+html.hc .border-l,
+html.hc .border-r {
+  border-color: var(--hc-border) !important;
+  border-width: var(--hc-border-width) !important;
+}
+
+/* ✅ Inputs with strong borders & text in HC */
 html.hc input,
 html.hc select,
 html.hc textarea,
 html.hc .a11y-input {
   color: var(--hc-text) !important;
   border-color: var(--hc-border) !important;
-  border-width: 2px !important;
+  border-width: var(--hc-border-width) !important;
+  font-weight: 600 !important;
 }
 
-/* Strong focus in HC */
+/* ✅ Buttons with high contrast */
+html.hc button {
+  border: var(--hc-border-width) solid var(--hc-border) !important;
+  color: var(--hc-text) !important;
+  font-weight: 600 !important;
+}
+
+/* ✅ Links with underlines in HC */
+html.hc a {
+  text-decoration: underline !important;
+  color: #0000ff !important;
+  font-weight: 600 !important;
+}
+
+html.hc.dark a {
+  color: #6ba3ff !important;
+}
+
+/* ✅ Very strong focus indicator in HC */
 html.hc :focus-visible {
   outline: 4px solid var(--hc-border) !important;
-  outline-offset: 2px !important;
+  outline-offset: 3px !important;
 }
 
 /* =========================================================
