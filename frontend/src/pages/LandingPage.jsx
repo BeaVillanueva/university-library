@@ -5,9 +5,14 @@ import {
   FiUserPlus,
   FiCheckCircle,
   FiMail,
-  FiSearch
+  FiSearch,
+  FiSettings,
+  FiX,
+  FiVolume2
 } from "react-icons/fi";
 import { apiListBooks } from "../api/books";
+import { loadA11yPrefs, saveA11yPrefs, DEFAULT_A11Y, applyA11yPrefs } from "../state/a11yPrefs";
+import { voiceReaderService } from "../services/VoiceReaderService";
 
 export default function LandingPage() {
   const nav = useNavigate();
@@ -18,6 +23,10 @@ export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingSearch, setLoadingSearch] = useState(false);
 
+  // ✅ Accessibility Settings State
+  const [showA11yModal, setShowA11yModal] = useState(false);
+  const [prefs, setPrefs] = useState(DEFAULT_A11Y);
+
   // ✅ IMPORTANT: Get API_BASE same way as BooksPage
   const API_BASE =
     localStorage.getItem("ulms_api_base_url") ||
@@ -25,6 +34,14 @@ export default function LandingPage() {
     "http://localhost/university-library/backend/public/index.php";
 
   const PUBLIC_BASE = String(API_BASE).replace(/\/index\.php\/?$/i, "");
+
+  // ✅ Load accessibility preferences on mount
+  useEffect(() => {
+    const savedPrefs = loadA11yPrefs('guest');
+    setPrefs(savedPrefs);
+    applyA11yPrefs(savedPrefs);
+    voiceReaderService.init(savedPrefs.voiceReader);
+  }, []);
 
   // ✅ Load featured books from API
   useEffect(() => {
@@ -58,6 +75,32 @@ export default function LandingPage() {
     return `${PUBLIC_BASE}/${u}`;
   }
 
+  // ✅ Handle accessibility preference changes
+  function handleA11yChange(key, value) {
+    const newPrefs = { ...prefs, [key]: value };
+    setPrefs(newPrefs);
+    saveA11yPrefs(newPrefs, 'guest');
+    applyA11yPrefs(newPrefs);
+
+    // ✅ Voice announcement
+    if (key === 'voiceReader') {
+      voiceReaderService.setEnabled(value);
+      if (value) {
+        voiceReaderService.speak('Voice reader enabled.');
+      } else {
+        voiceReaderService.speak('Voice reader disabled.');
+      }
+    }
+  }
+
+  // ✅ Reset accessibility settings
+  function handleA11yReset() {
+    setPrefs(DEFAULT_A11Y);
+    saveA11yPrefs(DEFAULT_A11Y, 'guest');
+    applyA11yPrefs(DEFAULT_A11Y);
+    voiceReaderService.speak('Accessibility settings reset to default.');
+  }
+
   // ✅ Handle search submission
   async function onSearch(e) {
     e.preventDefault();
@@ -73,6 +116,7 @@ export default function LandingPage() {
         q: query 
       });
       setSearchResults(res.items || []);
+      voiceReaderService.speak(`Search for "${query}" completed. ${res.items?.length || 0} results found.`);
     } catch (e) {
       console.error("Search failed:", e);
       setSearchResults([]);
@@ -127,9 +171,29 @@ export default function LandingPage() {
             >
               Register
             </NavLink>
+            
+            {/* ✅ Settings icon moved to the end */}
+            <button
+              onClick={() => setShowA11yModal(true)}
+              className="rounded-lg p-2 hover:bg-white/15 transition text-white"
+              title="Accessibility Settings"
+              aria-label="Open accessibility settings"
+            >
+              <FiSettings className="text-xl" />
+            </button>
           </div>
         </div>
       </header>
+
+      {/* ✅ NEW: Accessibility Settings Modal */}
+      {showA11yModal && (
+        <AccessibilityModal
+          prefs={prefs}
+          onClose={() => setShowA11yModal(false)}
+          onChange={handleA11yChange}
+          onReset={handleA11yReset}
+        />
+      )}
 
       {/* Show Search Results OR Featured Content */}
       {searchQuery ? (
@@ -165,7 +229,7 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={clearSearch}
-                className="rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
                 Clear
               </button>
@@ -459,5 +523,200 @@ function ServiceCard({ icon: Icon, title }) {
         <div className="text-sm font-extrabold">{title}</div>
       </div>
     </div>
+  );
+}
+
+// ✅ NEW: Accessibility Modal Component
+function AccessibilityModal({ prefs, onClose, onChange, onReset }) {
+  function clampFontSize(current, dir) {
+    const order = ["sm", "md", "lg", "xl"];
+    const idx = order.indexOf(current);
+    const n = Math.max(0, Math.min(order.length - 1, idx + dir));
+    return order[n];
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-4">
+            <h2 className="text-lg font-extrabold text-slate-900">
+              Accessibility Settings
+            </h2>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-2 hover:bg-slate-200 transition"
+              aria-label="Close settings"
+            >
+              <FiX className="text-xl text-slate-600" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="overflow-y-auto max-h-[70vh] p-6 space-y-4">
+            {/* Theme */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+              <label className="text-sm font-semibold text-slate-900">
+                Background / Theme
+              </label>
+              <div className="mt-3 flex gap-2">
+                {["system", "light", "dark"].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => onChange("theme", t)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium border transition ${
+                      prefs.theme === t
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t === "system" ? "System" : t === "light" ? "Light" : "Dark"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* High Contrast */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
+              <div>
+                <label className="text-sm font-semibold text-slate-900">
+                  High Contrast
+                </label>
+                <p className="text-xs text-slate-600 mt-1">
+                  Improves readability with stronger contrast
+                </p>
+              </div>
+              <Toggle
+                checked={prefs.contrast === "high"}
+                onChange={(checked) =>
+                  onChange("contrast", checked ? "high" : "normal")
+                }
+              />
+            </div>
+
+            {/* Font Size */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+              <label className="text-sm font-semibold text-slate-900">
+                Font Size
+              </label>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  onClick={() => onChange("fontSize", clampFontSize(prefs.fontSize, -1))}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 transition"
+                >
+                  A−
+                </button>
+                <span className="flex-1 text-center text-sm font-semibold text-slate-900">
+                  {prefs.fontSize.toUpperCase()}
+                </span>
+                <button
+                  onClick={() => onChange("fontSize", clampFontSize(prefs.fontSize, 1))}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 transition"
+                >
+                  A+
+                </button>
+              </div>
+            </div>
+
+            {/* Reduce Motion */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
+              <div>
+                <label className="text-sm font-semibold text-slate-900">
+                  Reduce Motion
+                </label>
+                <p className="text-xs text-slate-600 mt-1">
+                  Minimizes animations and transitions
+                </p>
+              </div>
+              <Toggle
+                checked={prefs.reduceMotion}
+                onChange={(checked) => onChange("reduceMotion", checked)}
+              />
+            </div>
+
+            {/* Dyslexia Font */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
+              <div>
+                <label className="text-sm font-semibold text-slate-900">
+                  Dyslexia-Friendly Font
+                </label>
+                <p className="text-xs text-slate-600 mt-1">
+                  Switch to a more readable font style
+                </p>
+              </div>
+              <Toggle
+                checked={prefs.dyslexiaFont}
+                onChange={(checked) => onChange("dyslexiaFont", checked)}
+              />
+            </div>
+
+            {/* Voice Reader */}
+            <div className="rounded-xl border border-blue-200 p-4 bg-gradient-to-r from-blue-50 to-transparent">
+              <div className="flex items-start gap-3">
+                <FiVolume2 className="mt-1 text-blue-600 flex-shrink-0 text-lg" />
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-slate-900">
+                    Voice Reader
+                  </label>
+                  <p className="text-xs text-slate-600 mt-1">
+                    The voice reader will announce page loads and actions
+                  </p>
+                </div>
+                <Toggle
+                  checked={prefs.voiceReader}
+                  onChange={(checked) => onChange("voiceReader", checked)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex gap-3">
+            <button
+              onClick={onReset}
+              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+            >
+              Reset
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ✅ Toggle Switch Component
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-9 w-16 items-center rounded-full border-2 transition ${
+        checked
+          ? "border-blue-600 bg-blue-600"
+          : "border-slate-300 bg-slate-200"
+      }`}
+      role="switch"
+      aria-checked={checked}
+    >
+      <span
+        className={`inline-block h-7 w-7 transform rounded-full bg-white shadow-md transition ${
+          checked ? "translate-x-7" : "translate-x-1"
+        }`}
+      />
+    </button>
   );
 }
