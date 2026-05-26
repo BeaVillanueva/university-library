@@ -289,6 +289,34 @@ export default function BooksPage() {
     return "bg-green-50 text-green-700 border-green-200"; // returned
   }
 
+  // ✅ NEW: stock status helpers for librarian/student book cards
+  function getStockStatus(availableCopies) {
+    const n = Number(availableCopies ?? 0);
+    if (!Number.isFinite(n) || n <= 0) return "unavailable";
+    if (n <= 3) return "low";
+    return "available";
+  }
+
+  function getStockUi(availableCopies) {
+    const s = getStockStatus(availableCopies);
+    if (s === "unavailable") {
+      return {
+        label: "Unavailable",
+        cls: "bg-red-50 text-red-700 border border-red-200"
+      };
+    }
+    if (s === "low") {
+      return {
+        label: "Low Stock",
+        cls: "bg-amber-50 text-amber-700 border border-amber-200"
+      };
+    }
+    return {
+      label: "Available",
+      cls: "bg-green-50 text-green-700 border border-green-200"
+    };
+  }
+
   function getDaysLeft(dueDate) {
     if (!dueDate) return null;
     const due = new Date(dueDate);
@@ -296,6 +324,20 @@ export default function BooksPage() {
     const diff = due - now;
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
+
+  // ✅ Filter list on the frontend for new availability categories
+  const filteredItems = useMemo(() => {
+    const a = String(availability || "").toLowerCase();
+    if (!a) return items;
+
+    return (items || []).filter((b) => {
+      const avail = Number(b?.copies_available ?? 0);
+      if (a === "available") return avail >= 4;
+      if (a === "low") return avail > 0 && avail <= 3;
+      if (a === "unavailable") return avail === 0;
+      return true;
+    });
+  }, [items, availability]);
 
   return (
     <div>
@@ -512,6 +554,7 @@ export default function BooksPage() {
             >
               <option value="">All</option>
               <option value="available">Available</option>
+              <option value="low">Low Stock</option>
               <option value="unavailable">Unavailable</option>
             </select>
           </div>
@@ -551,7 +594,7 @@ export default function BooksPage() {
             </div>
             <p className="mt-2">Loading books...</p>
           </div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="text-center text-slate-600 py-12">
             <FiBookOpen className="text-4xl mx-auto mb-3 text-slate-400" />
             <p>No books found.</p>
@@ -559,8 +602,9 @@ export default function BooksPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {items.map((b) => {
+              {filteredItems.map((b) => {
                 const src = coverSrc(b);
+                const stock = getStockUi(b?.copies_available);
 
                 return (
                   <div
@@ -596,17 +640,18 @@ export default function BooksPage() {
                       <p className="text-xs text-slate-500 mt-1">{b.category_name || "—"}</p>
 
                       {/* Availability Badge */}
-                      <div className="mt-3 mb-3">
+                      <div className="mt-3 mb-3 flex items-center gap-2">
                         <span
                           className={[
                             "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                            b.copies_available > 0
-                              ? "bg-green-50 text-green-700"
-                              : "bg-slate-100 text-slate-600"
+                            stock.cls
                           ].join(" ")}
                           aria-label={`Copies available ${b.copies_available}`}
                         >
                           {b.copies_available}/{b.copies_total}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600">
+                          {stock.label}
                         </span>
                       </div>
 
