@@ -201,11 +201,31 @@ export default function LandingPage() {
             <span>Library</span>
           </div>
 
-          <nav className="hidden items-center gap-6 text-sm font-semibold md:flex">
-            <a href="#home" className="text-white/90 hover:text-white">Home</a>
-            <a href="#profile" className="text-white/90 hover:text-white">Profile</a>
-            <a href="#services" className="text-white/90 hover:text-white">Services</a>
-            <a href="#recommendation" className="text-white/90 hover:text-white">Featured Books</a>
+          <nav className="hidden items-center gap-2 text-sm font-semibold md:flex">
+            <a
+              href="#home"
+              className="rounded-lg px-3 py-2 text-white/90 hover:bg-white/10 hover:text-white transition"
+            >
+              Home
+            </a>
+            <a
+              href="#profile"
+              className="rounded-lg px-3 py-2 text-white/90 hover:bg-white/10 hover:text-white transition"
+            >
+              Profile
+            </a>
+            <a
+              href="#services"
+              className="rounded-lg px-3 py-2 text-white/90 hover:bg-white/10 hover:text-white transition"
+            >
+              Services
+            </a>
+            <a
+              href="#recommendation"
+              className="rounded-lg px-3 py-2 text-white/90 hover:bg-white/10 hover:text-white transition"
+            >
+              Featured Books
+            </a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -219,14 +239,13 @@ export default function LandingPage() {
             {/* ✅ Settings icon moved to the end */}
             <button
               aria-label="Open Accessibility Settings"
+              className="rounded-xl p-2 text-white/90 hover:bg-white/10 hover:text-white transition"
               onClick={() => {
-              setShowA11yModal(true);
+                setShowA11yModal(true);
 
-              if (voiceReaderService.getEnabled()) {
-              voiceReaderService.speak(
-              "Accessibility settings opened"
-              );
-              }
+                if (voiceReaderService.getEnabled()) {
+                  voiceReaderService.speak("Accessibility settings opened");
+                }
               }}
             >
               <FiSettings className="text-xl" />
