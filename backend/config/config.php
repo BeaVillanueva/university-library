@@ -3,25 +3,25 @@ declare(strict_types=1);
 
 return [
   'app' => [
-    'env' => 'local',
-    'base_url' => 'http://localhost/university-library/backend/public/index.php',
+    'env' => getenv('APP_ENV') ?: 'local',
+    'base_url' => getenv('APP_URL') ?: 'http://localhost/university-library/backend/public/index.php',
   ],
 
   'frontend' => [
-    'base_url' => 'http://localhost:5173',
+    'base_url' => getenv('FRONTEND_URL') ?: 'http://localhost:5173',
   ],
 
   'db' => [
-    'host' => '127.0.0.1',
-    'port' => 3306,
-    'name' => 'university_library',
-    'user' => 'root',
-    'pass' => '',
+    'host' => getenv('DB_HOST') ?: '127.0.0.1',
+    'port' => (int)(getenv('DB_PORT') ?: 3306),
+    'name' => getenv('DB_DATABASE') ?: 'university_library',
+    'user' => getenv('DB_USERNAME') ?: 'root',
+    'pass' => getenv('DB_PASSWORD') ?: '',
     'charset' => 'utf8mb4',
   ],
 
   'jwt' => [
-    'secret' => 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET',
+    'secret' => getenv('JWT_SECRET') ?: 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET',
     'issuer' => 'university-library-api',
     'audience' => 'university-library-web',
     'expires_in_seconds' => 60 * 5,
@@ -30,6 +30,8 @@ return [
   'cors' => [
     'allowed_origins' => [
       'http://localhost:5173',
+      'https://university-library-one-blush.vercel.app',
+      'https://university-library-7xuqu47mu-beatrezvillanueva-7952s-projects.vercel.app',
     ],
   ],
 
@@ -39,13 +41,13 @@ return [
   ],
 
   'email' => [
-    'smtp_host' => 'smtp.gmail.com',
-    'smtp_port' => 587,
+    'smtp_host' => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
+    'smtp_port' => (int)(getenv('SMTP_PORT') ?: 587),
     'smtp_secure' => 'tls',
-    'smtp_user' => 'vbea011@gmail.com',
-    'smtp_password' => 'bfmlpfriqzifyxgt',
-    'from_email' => 'vbea011@gmail.com',
-    'from_name' => 'CVSU Imus Library',
+    'smtp_user' => getenv('SMTP_USER') ?: '',
+    'smtp_password' => getenv('SMTP_PASSWORD') ?: '',
+    'from_email' => getenv('FROM_EMAIL') ?: '',
+    'from_name' => getenv('FROM_NAME') ?: 'CVSU Imus Library',
   ],
 
   'reminders' => [
