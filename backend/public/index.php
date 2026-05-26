@@ -8,6 +8,10 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+
+  // Vercel
+  'https://university-library-one-blush.vercel.app',
+  'https://university-library-7xuqu47mu-beatrezvillanueva-7952s-projects.vercel.app',
 ];
 
 if (in_array($origin, $allowedOrigins, true)) {
