@@ -8,7 +8,7 @@ function logoutNow() {
   localStorage.removeItem("ulms_token");
   localStorage.removeItem("ulms_user");
 
-  window.location.replace("/login");
+  window.location.replace("/");
 }
 
 function resetTimer() {

@@ -362,7 +362,7 @@ export default function BooksPage() {
                           <img
                             src={coverUrl}
                             alt={record.title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                             }}
@@ -568,22 +568,21 @@ export default function BooksPage() {
                     className="rounded-lg border border-slate-200 shadow-sm hover:shadow-lg transition overflow-hidden bg-white a11y-surface a11y-outline"
                   >
                     {/* Book Cover Image */}
-                    <div className="h-48 bg-slate-100 flex items-center justify-center overflow-hidden">
+                    <div className="h-[340px] bg-slate-100 flex items-center justify-center overflow-hidden rounded-t-xl">
                       {src ? (
                         <img
                           src={src}
                           alt={b.title}
-                          className="w-full h-full object-cover"
+                          className="h-full w-auto object-contain transition-transform duration-300 hover:scale-105"
                           loading="lazy"
                           onError={(e) => {
-                            // show fallback if URL is broken
                             e.currentTarget.style.display = "none";
                           }}
                         />
                       ) : (
                         <div className="text-slate-400 text-center">
-                          <div className="text-5xl">📖</div>
-                          <p className="text-xs mt-2">No Cover</p>
+                          <div className="text-6xl">📖</div>
+                          <p className="text-sm mt-2">No Cover</p>
                         </div>
                       )}
                     </div>

@@ -170,12 +170,12 @@ function BorrowCard({ record, isActive, apiBase }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="mb-3 aspect-[3/4] w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+      <div className="mb-3 h-[340px] flex items-center justify-center overflow-hidden rounded-xl bg-slate-100">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={record.title}
-            className="h-full w-full object-cover"
+            className="h-[95%] object-contain transition-transform duration-300 hover:scale-105"
             onError={(e) => {
               console.error("Image failed to load:", imageUrl);
               e.target.style.display = "none";
