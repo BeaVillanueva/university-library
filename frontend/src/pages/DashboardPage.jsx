@@ -247,17 +247,27 @@ export default function DashboardPage() {
 
 function KpiCard({ title, value, tone }) {
   return (
-    <div className={["rounded-2xl border border-slate-200 p-4 shadow-sm", tone].join(" ")}>
-      <div className="text-xs uppercase tracking-wide text-slate-600">{title}</div>
-      <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+    <div
+      className={[
+        "rounded-2xl border border-slate-200 p-4 shadow-sm",
+        "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100",
+        tone
+      ].join(" ")}
+    >
+      <div className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
+        {title}
+      </div>
+      <div className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">
+        {value}
+      </div>
     </div>
   );
 }
 
 function Panel({ title, children }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-sm font-semibold">{title}</div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div className="text-sm font-semibold text-slate-900 dark:text-white">{title}</div>
       <div className="mt-3">{children}</div>
     </div>
   );
