@@ -11,22 +11,7 @@ export default function MyBorrowsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ FIXED: Get correct API base URL
-  const getApiBase = () => {
-    const fromLs = localStorage.getItem("ulms_api_base_url");
-    if (fromLs && fromLs.startsWith("http")) {
-      // Remove /index.php to get base path
-      return fromLs.replace(/\/index\.php\/?$/, "");
-    }
-    
-    // Auto-detect from current host
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    // ✅ FIXED: Default to Apache path (no port)
-    return `${protocol}//${host}/university-library/backend/public`;
-  };
-
-  const API_BASE_URL = getApiBase();
+  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/index\.php\/?$/, "");
 
   useEffect(() => {
     announcePageLoad("MY_BORROWS");
@@ -34,10 +19,12 @@ export default function MyBorrowsPage() {
 
   useEffect(() => {
     let cancelled = false;
+
     async function load() {
       setLoading(true);
       setError("");
       announceLoading("your borrowing history");
+
       try {
         const res = await apiMyBorrowHistory({ page, limit: 12 });
         if (!cancelled) {
@@ -45,12 +32,16 @@ export default function MyBorrowsPage() {
           setTotalPages(res.total_pages || 1);
         }
       } catch (e) {
-        if (!cancelled) setError(e?.response?.data?.error || e?.message || "Failed to load history");
+        if (!cancelled) {
+          setError(e?.response?.data?.error || e?.message || "Failed to load history");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     load();
+
     return () => {
       cancelled = true;
     };
@@ -156,17 +147,17 @@ function BorrowCard({ record, isActive, apiBase }) {
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
-  // ✅ FIXED: Construct proper image URL
-  const imageUrl = record.cover_image_url
-    ? record.cover_image_url.startsWith("http")
-      ? record.cover_image_url
-      : `${apiBase}${record.cover_image_url}`
-    : null;
+  const normalizeImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
 
-  // ✅ DEBUG: Log the URL for checking
-  if (imageUrl && process.env.NODE_ENV === "development") {
-    console.log("Book cover URL:", imageUrl);
-  }
+    const cleanBase = (apiBase || "").replace(/\/$/, "");
+    const cleanPath = url.startsWith("/") ? url : `/${url}`;
+
+    return `${cleanBase}${cleanPath}`;
+  };
+
+  const imageUrl = normalizeImageUrl(record.cover_image_url);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -177,14 +168,13 @@ function BorrowCard({ record, isActive, apiBase }) {
             alt={record.title}
             className="h-[95%] object-contain transition-transform duration-300 hover:scale-105"
             onError={(e) => {
-              console.error("Image failed to load:", imageUrl);
-              e.target.style.display = "none";
-              if (e.target.nextElementSibling) {
-                e.target.nextElementSibling.style.display = "flex";
-              }
+              e.currentTarget.style.display = "none";
+              const fallback = e.currentTarget.nextElementSibling;
+              if (fallback) fallback.style.display = "flex";
             }}
           />
         ) : null}
+
         <div
           className="flex flex-col items-center justify-center text-slate-400 text-center p-4"
           style={{ display: imageUrl ? "none" : "flex" }}
@@ -197,15 +187,11 @@ function BorrowCard({ record, isActive, apiBase }) {
       <div className="space-y-2">
         <div>
           <h3 className="font-semibold text-slate-800 line-clamp-2">{record.title}</h3>
-          {record.author && (
-            <p className="text-xs text-slate-500">{record.author}</p>
-          )}
+          {record.author && <p className="text-xs text-slate-500">{record.author}</p>}
         </div>
 
         <div className="flex gap-2 items-center">
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${statusColor}`}
-          >
+          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${statusColor}`}>
             {String(record.status || "—").toUpperCase()}
           </span>
         </div>
