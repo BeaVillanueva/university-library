@@ -3,7 +3,6 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useUi } from "../state/UiContext";
 import { http } from "../api/http";
-import { apiListPendingStudents } from "../api/users";
 import { apiListAllBorrows } from "../api/borrow";
 import { apiListAnnouncements } from "../api/announcements";
 import { useIdleTimer } from "../hooks/useIdleTimer";
@@ -141,8 +140,6 @@ export default function AppLayout() {
   const [usersOpen, setUsersOpen] = useState(() =>
     loc.pathname.startsWith("/app/admin/users")
   );
-  const [pendingCount, setPendingCount] = useState(0);
-
   const [pendingBorrowsCount, setPendingBorrowsCount] = useState(0);
 
   const [borrowingOpen, setBorrowingOpen] = useState(() =>
@@ -195,31 +192,6 @@ export default function AppLayout() {
   function onNavigate() {
     setOpen(false);
   }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPendingCount() {
-      if (!isAdmin) return;
-
-      try {
-        const res = await apiListPendingStudents();
-        const count = Array.isArray(res?.items) ? res.items.length : 0;
-
-        if (!cancelled) setPendingCount(count);
-      } catch {
-        if (!cancelled) setPendingCount(0);
-      }
-    }
-
-    loadPendingCount();
-    const t = setInterval(loadPendingCount, 30000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -409,14 +381,6 @@ export default function AppLayout() {
 
                   {usersOpen && !collapsed && (
                     <div className="mt-1 space-y-1">
-                      <SubLinkItem
-                        to="/app/admin/users/pending"
-                        label="Pending Approval"
-                        onNavigate={onNavigate}
-                        collapsed={collapsed}
-                        end
-                        badge={pendingCount}
-                      />
                       <SubLinkItem
                         to="/app/admin/users"
                         label="All Users"

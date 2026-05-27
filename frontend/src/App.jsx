@@ -147,14 +147,6 @@ export default function App() {
           }
         />
         <Route
-          path="admin/users/pending"
-          element={
-            <ProtectedRoute roles={["admin"]}>
-              <AdminUsersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="admin/users/create"
           element={
             <ProtectedRoute roles={["admin"]}>

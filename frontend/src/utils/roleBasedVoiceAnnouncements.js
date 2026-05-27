@@ -22,7 +22,7 @@ export function getRoleBasedAnnouncement(pageName, role = 'guest') {
     'BOOKS:guest': 'Welcome to Books. You may browse available books.',
 
     // === ADMIN MODULE ===
-    'ADMIN_USERS:admin': 'You are on the Users Management page. You can create new users, manage roles, approve pending students, and delete users.',
+    'ADMIN_USERS:admin': 'You are on the Users Management page. You can create new users, manage roles, and delete users.',
     'ADMIN_REPORTS:admin': 'You are on the Reports page. Filter reports by date range and report type, then export data to CSV for analysis.',
     'ADMIN_CATEGORIES:admin': 'You are on the Categories Management page. You can create, edit, or delete book categories.',
 

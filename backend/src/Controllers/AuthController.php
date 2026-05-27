@@ -337,7 +337,7 @@ final class AuthController {
           'status' => $status,
         ],
       ]);
-      Http::error('Account pending admin approval.', 403);
+      Http::error('Account is not active. Please contact the library administrator.', 403);
     }
 
     // ✅ success -> reset attempts for this email
@@ -420,7 +420,14 @@ final class AuthController {
     ';
     $text = "Your CVSU Library registration OTP is {$otp}. It expires in 10 minutes.";
 
-    Mailer::send($config['app_script_mail'] ?? [], $payload['email'], $payload['name'], $subject, $html, $text);
+    try {
+      Mailer::send($config['app_script_mail'] ?? [], $payload['email'], $payload['name'], $subject, $html, $text);
+    } catch (Throwable $e) {
+      $pdo->prepare("DELETE FROM registration_otps WHERE email = ? OR student_number = ?")
+        ->execute([$payload['email'], $payload['student_number']]);
+      error_log('Registration OTP email error: ' . $e->getMessage());
+      Http::error('Failed to send authentication code. Please check the mailer configuration.', 500);
+    }
 
     Http::ok([
       'message' => 'OTP sent. Please check your CVSU email.',

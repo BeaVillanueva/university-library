@@ -34,7 +34,7 @@ function safeSetItem(key, value) {
  * ✅ Get default route based on user role
  * - student → /app/books (browse & borrow books)
  * - librarian → /app/librarian/borrowing/pending (handle pending requests)
- * - admin → /app/admin/users/pending (manage students)
+ * - admin -> /app/admin/users (manage users)
  * - default → /app (dashboard)
  */
 export function getDefaultRoute(user) {
@@ -44,7 +44,7 @@ export function getDefaultRoute(user) {
   
   if (role === "student") return "/app/books";
   if (role === "librarian") return "/app/librarian/borrowing/pending";
-  if (role === "admin") return "/app/admin/users/pending";
+  if (role === "admin") return "/app/admin/users";
   
   return "/app";
 }

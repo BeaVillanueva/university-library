@@ -153,8 +153,8 @@ export default function RegisterStudentPage() {
     setNotice("");
 
     if (otpSent) {
-      if (!otp.trim()) {
-        setError("OTP is required.");
+      if (otp.trim().length !== 6) {
+        setError("Enter the 6-digit authentication code sent to your CVSU email.");
         return;
       }
 
@@ -186,7 +186,7 @@ export default function RegisterStudentPage() {
       await apiRequestRegistrationOtp(registrationPayload());
       setOtpEmail(fullEmail);
       setOtpSent(true);
-      setNotice("OTP sent. Please check your CVSU email.");
+      setNotice("Authentication code sent. Please check your CVSU email.");
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Registration failed");
     } finally {
@@ -373,12 +373,12 @@ export default function RegisterStudentPage() {
                 </div>
 
 
-                {otpSent ? (
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="text-sm font-medium text-white/90" htmlFor="otp">
-                        Email OTP
-                      </label>
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium text-white/90" htmlFor="otp">
+                      Authentication Code
+                    </label>
+                    {otpSent ? (
                       <button
                         type="button"
                         className="text-xs font-semibold text-white hover:underline disabled:opacity-60"
@@ -387,22 +387,25 @@ export default function RegisterStudentPage() {
                       >
                         Edit details
                       </button>
-                    </div>
-                    <input
-                      id="otp"
-                      className="mt-1 w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="000000"
-                      required
-                    />
-                    <div className="mt-1 text-xs text-white/70">
-                      Enter the 6-digit code sent to {otpEmail || fullEmail}.
-                    </div>
+                    ) : null}
                   </div>
-                ) : null}
+                  <input
+                    id="otp"
+                    className="mt-1 w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    disabled={!otpSent}
+                    required={otpSent}
+                  />
+                  <div className="mt-1 text-xs text-white/70">
+                    {otpSent
+                      ? `Enter the 6-digit code sent to ${otpEmail || fullEmail}.`
+                      : "Click Send Authentication Code first. Only @cvsu.edu.ph emails can receive a code."}
+                  </div>
+                </div>
 
 
                 {notice ? (
@@ -420,7 +423,7 @@ export default function RegisterStudentPage() {
                   className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
                   disabled={loading}
                 >
-                  {loading ? "Submitting..." : otpSent ? "Verify OTP and Create Account" : "Send OTP"}
+                  {loading ? "Submitting..." : otpSent ? "Verify Code and Create Account" : "Send Authentication Code"}
                 </button>
 
                 <div className="text-center text-sm text-white/90">
