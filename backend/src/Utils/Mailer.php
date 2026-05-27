@@ -1,41 +1,48 @@
 <?php
 declare(strict_types=1);
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
 final class Mailer {
-  public static function send(array $smtp, string $toEmail, string $toName, string $subject, string $html, string $text = ''): void {
-    $mail = new PHPMailer(true);
+  public static function send(array $config, string $toEmail, string $toName, string $subject, string $html, string $text = ''): void {
+    $url = trim((string)($config['url'] ?? ''));
 
-    try {
-      $mail->isSMTP();
-      $mail->Host = (string)$smtp['host'];
-      $mail->SMTPAuth = true;
-      $mail->Username = (string)$smtp['username'];
-      $mail->Password = (string)$smtp['password'];
+    if ($url === '') {
+      throw new RuntimeException('Google Apps Script mail URL is not configured.');
+    }
 
-      $secure = (string)($smtp['secure'] ?? 'tls'); // tls|ssl
-      $mail->SMTPSecure = $secure === 'ssl'
-        ? PHPMailer::ENCRYPTION_SMTPS
-        : PHPMailer::ENCRYPTION_STARTTLS;
+    $payload = [
+      'secret' => (string)($config['secret'] ?? ''),
+      'to' => $toEmail,
+      'name' => $toName !== '' ? $toName : $toEmail,
+      'subject' => $subject,
+      'html' => $html,
+      'text' => $text !== '' ? $text : trim(strip_tags($html)),
+    ];
 
-      $mail->Port = (int)($smtp['port'] ?? 587);
+    $context = stream_context_create([
+      'http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/json\r\n",
+        'content' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+        'ignore_errors' => true,
+        'timeout' => 15,
+      ],
+    ]);
 
-      $fromEmail = (string)$smtp['from_email'];
-      $fromName = (string)($smtp['from_name'] ?? $fromEmail);
+    $response = @file_get_contents($url, false, $context);
 
-      $mail->setFrom($fromEmail, $fromName);
-      $mail->addAddress($toEmail, $toName !== '' ? $toName : $toEmail);
+    if ($response === false) {
+      throw new RuntimeException('Email send failed: Apps Script request failed.');
+    }
 
-      $mail->isHTML(true);
-      $mail->Subject = $subject;
-      $mail->Body = $html;
-      $mail->AltBody = $text !== '' ? $text : strip_tags($html);
+    $statusLine = $http_response_header[0] ?? '';
+    if (!preg_match('/\s2\d\d\s/', $statusLine)) {
+      throw new RuntimeException('Email send failed: Apps Script returned ' . ($statusLine ?: 'unknown status') . '.');
+    }
 
-      $mail->send();
-    } catch (Exception $e) {
-      throw new RuntimeException('Email send failed: ' . $mail->ErrorInfo);
+    $data = json_decode($response, true);
+    if (!is_array($data) || ($data['ok'] ?? false) !== true) {
+      $message = is_array($data) && isset($data['error']) ? (string)$data['error'] : 'Unknown Apps Script response.';
+      throw new RuntimeException('Email send failed: ' . $message);
     }
   }
 }

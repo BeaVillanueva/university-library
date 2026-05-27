@@ -479,8 +479,8 @@ final class AuthController {
     ';
     $text = "Reset your password using this link (expires in 30 minutes):\n" . $resetLink;
 
-    // Send email (Gmail SMTP)
-    Mailer::send($config['smtp'], $email, (string)($user['name'] ?? ''), $subject, $html, $text);
+    // Send email through Google Apps Script instead of SMTP.
+    Mailer::send($config['app_script_mail'] ?? [], $email, (string)($user['name'] ?? ''), $subject, $html, $text);
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => (int)$user['id'],

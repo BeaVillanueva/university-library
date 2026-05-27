@@ -50,6 +50,11 @@ return [
     'from_name' => getenv('FROM_NAME') ?: 'CVSU Imus Library',
   ],
 
+  'app_script_mail' => [
+    'url' => getenv('GOOGLE_APPS_SCRIPT_MAIL_URL') ?: '',
+    'secret' => getenv('GOOGLE_APPS_SCRIPT_MAIL_SECRET') ?: '',
+  ],
+
   'reminders' => [
     'enabled' => true,
     'days_before_due' => [3, 1],
