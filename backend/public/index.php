@@ -143,6 +143,9 @@ $router->add('POST', '/auth/login', function () use ($config) {
 $router->add('POST', '/auth/register', function () use ($config) {
   AuthController::registerStudent(pdo($config), $config);
 });
+$router->add('POST', '/auth/register/request-otp', function () use ($config) {
+  AuthController::requestRegistrationOtp(pdo($config), $config);
+});
 $router->add('POST', '/auth/forgot-password', function () use ($config) {
   AuthController::forgotPassword(pdo($config), $config);
 });

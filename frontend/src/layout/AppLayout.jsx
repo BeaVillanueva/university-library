@@ -7,6 +7,7 @@ import { apiListPendingStudents } from "../api/users";
 import { apiListAllBorrows } from "../api/borrow";
 import { apiListAnnouncements } from "../api/announcements";
 import { useIdleTimer } from "../hooks/useIdleTimer";
+import ConfirmModal from "../components/ConfirmModal";
 import {
   FiHome,
   FiUsers,
@@ -129,6 +130,8 @@ export default function AppLayout() {
   });
 
   const [announcementCount, setAnnouncementCount] = useState(0);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   const role = user?.role;
   const isAdmin = role === "admin";
@@ -163,11 +166,14 @@ export default function AppLayout() {
   }, [loc.pathname]);
 
   async function handleLogout() {
+    setLogoutLoading(true);
     try {
       await http.post("/auth/logout", {});
     } catch {
       // ignore
     } finally {
+      setLogoutLoading(false);
+      setLogoutOpen(false);
       logout();
       nav("/", { replace: true });
     }
@@ -577,7 +583,7 @@ export default function AppLayout() {
             <div className="pt-3 shrink-0 space-y-4">
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={() => setLogoutOpen(true)}
                 className="w-full rounded-2xl bg-[#f7f4ea] px-4 py-3 text-sm font-bold text-[#27553f] shadow-sm hover:bg-[#fff8df]"
               >
                 <span className="flex items-center justify-center gap-3">
@@ -616,6 +622,16 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+      <ConfirmModal
+        open={logoutOpen}
+        title="Log out?"
+        message="You will be signed out and returned to the landing page."
+        confirmText="Log out"
+        tone="danger"
+        loading={logoutLoading}
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 }

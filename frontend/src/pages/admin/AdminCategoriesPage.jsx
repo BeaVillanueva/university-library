@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { apiCreateCategory, apiDeleteCategory, apiListCategories, apiUpdateCategory } from "../../api/categories";
 import Alert from "../../components/Alert";
+import ConfirmModal from "../../components/ConfirmModal";
 
 export default function AdminCategoriesPage() {
   const [items, setItems] = useState([]);
@@ -10,6 +11,7 @@ export default function AdminCategoriesPage() {
   const [workingId, setWorkingId] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -58,7 +60,6 @@ export default function AdminCategoriesPage() {
   }
 
   async function remove(id) {
-    if (!confirm("Delete this category? Books using it will become uncategorized.")) return;
     setWorkingId(id);
     setError("");
     setNotice("");
@@ -70,6 +71,7 @@ export default function AdminCategoriesPage() {
       setError(e?.response?.data?.error || e?.message || "Delete failed");
     } finally {
       setWorkingId(null);
+      setDeleteTarget(null);
     }
   }
 
@@ -116,12 +118,22 @@ export default function AdminCategoriesPage() {
               <div className="text-sm text-slate-600 a11y-muted">No categories.</div>
             ) : (
               items.map((c) => (
-                <CategoryRow key={c.id} c={c} onRename={rename} onDelete={remove} disabled={workingId === c.id} />
+                <CategoryRow key={c.id} c={c} onRename={rename} onDelete={setDeleteTarget} disabled={workingId === c.id} />
               ))
             )}
           </div>
         </div>
       </div>
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete category?"
+        message="Books using this category will become uncategorized."
+        confirmText="Delete"
+        tone="danger"
+        loading={workingId === deleteTarget?.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }
@@ -149,7 +161,7 @@ function CategoryRow({ c, onRename, onDelete, disabled }) {
       </button>
       <button
         className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 a11y-surface a11y-outline"
-        onClick={() => onDelete(c.id)}
+        onClick={() => onDelete(c)}
         disabled={disabled}
         type="button"
         aria-label={`Delete category ${c.name}`}

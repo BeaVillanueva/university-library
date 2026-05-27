@@ -8,6 +8,7 @@ import {
 } from "../api/announcements";
 import { useAuth } from "../state/AuthContext";
 import Alert from "./Alert";
+import ConfirmModal from "./ConfirmModal";
 import { announcePageLoad } from "../hooks/useVoiceGuide";
 
 export default function AnnouncementPanel() {
@@ -18,6 +19,7 @@ export default function AnnouncementPanel() {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -83,10 +85,9 @@ export default function AnnouncementPanel() {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete announcement?")) return;
-
     try {
       await apiDeleteAnnouncement(id);
+      setDeleteTarget(null);
       await loadAnnouncements();
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to delete announcement");
@@ -254,7 +255,7 @@ export default function AnnouncementPanel() {
 
                     <button
                       type="button"
-                      onClick={() => handleDelete(ann.id)}
+                      onClick={() => setDeleteTarget(ann)}
                       className="rounded-xl bg-red-600 p-2 text-white hover:bg-red-700"
                       title="Delete"
                     >
@@ -267,6 +268,15 @@ export default function AnnouncementPanel() {
           ))}
         </div>
       )}
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete announcement?"
+        message={`Delete "${deleteTarget?.title || "this announcement"}"? This cannot be undone.`}
+        confirmText="Delete"
+        tone="danger"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+      />
     </div>
   );
 }

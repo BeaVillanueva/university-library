@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { apiLogin, apiMe } from "../api/auth";
-import { applyA11yPrefs, DEFAULT_A11Y } from "./a11yPrefs";
+import { applyA11yPrefs, DEFAULT_A11Y, loadA11yPrefs } from "./a11yPrefs";
 
 const AuthContext = createContext(null);
 
@@ -99,6 +99,12 @@ export function AuthProvider({ children }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    if (!user) return;
+    const userKey = user.email || user.id || user.user_id || user.name || "guest";
+    applyA11yPrefs(loadA11yPrefs(userKey));
+  }, [user]);
 
   async function login(email, password) {
     setLoading(true);

@@ -13,6 +13,7 @@ import Pagination from "../../components/Pagination";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import Alert from "../../components/Alert";
+import ConfirmModal from "../../components/ConfirmModal";
 
 const IMUS_COURSES = [
   "AB Journalism",
@@ -82,6 +83,7 @@ export default function AdminUsersPage() {
   const [workingId, setWorkingId] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const isStudentForm = form.role === "student";
   const courseOptions = useMemo(() => IMUS_COURSES, []);
@@ -259,7 +261,6 @@ export default function AdminUsersPage() {
   }
 
   async function removeUser(id) {
-    if (!confirm("Delete this user?")) return;
     setWorkingId(id);
     setError("");
     setNotice("");
@@ -274,6 +275,7 @@ export default function AdminUsersPage() {
       setError(errorMsg);
     } finally {
       setWorkingId(null);
+      setDeleteTarget(null);
     }
   }
 
@@ -589,7 +591,7 @@ export default function AdminUsersPage() {
                         <td className="px-3 py-2">
                           <button
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs hover:bg-slate-50 shadow-sm a11y-surface a11y-outline"
-                            onClick={() => removeUser(u.id)}
+                            onClick={() => setDeleteTarget(u)}
                             disabled={workingId === u.id}
                             type="button"
                           >
@@ -709,6 +711,16 @@ export default function AdminUsersPage() {
           </form>
         </div>
       ) : null}
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete user?"
+        message={`Delete ${deleteTarget?.name || "this user"}? This cannot be undone.`}
+        confirmText="Delete"
+        tone="danger"
+        loading={workingId === deleteTarget?.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && removeUser(deleteTarget.id)}
+      />
     </div>
   );
 }

@@ -15,6 +15,11 @@ export async function apiRegisterStudent(payload) {
   return res.data;
 }
 
+export async function apiRequestRegistrationOtp(payload) {
+  const res = await http.post("/auth/register/request-otp", payload);
+  return res.data;
+}
+
 export async function apiForgotPassword(email) {
   const res = await http.post("/auth/forgot-password", { email });
   return res.data;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiRegisterStudent } from "../api/auth";
+import { apiRegisterStudent, apiRequestRegistrationOtp } from "../api/auth";
 import { useUi } from "../state/UiContext";
 import {
   FiEye,
@@ -95,6 +95,9 @@ export default function RegisterStudentPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpEmail, setOtpEmail] = useState("");
 
   const fullEmail = form.emailLocal ? `${form.emailLocal}${EMAIL_DOMAIN}` : "";
 
@@ -126,10 +129,51 @@ export default function RegisterStudentPage() {
     return "";
   }
 
+  function registrationPayload() {
+    return {
+      name: form.name.trim(),
+      email: fullEmail,
+      password: form.password,
+      student_number: form.student_number.trim(),
+      department: form.department,
+    };
+  }
+
+  function editDetails() {
+    setOtpSent(false);
+    setOtp("");
+    setOtpEmail("");
+    setNotice("");
+    setError("");
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setError("");
     setNotice("");
+
+    if (otpSent) {
+      if (!otp.trim()) {
+        setError("OTP is required.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await apiRegisterStudent({
+          email: otpEmail || fullEmail,
+          otp: otp.trim(),
+        });
+
+        setNotice("Registration verified. You can now log in.");
+        setTimeout(() => nav("/login"), 1200);
+      } catch (e2) {
+        setError(e2?.response?.data?.error || e2?.message || "OTP verification failed");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const msg = validate();
     if (msg) {
@@ -139,16 +183,10 @@ export default function RegisterStudentPage() {
 
     setLoading(true);
     try {
-      await apiRegisterStudent({
-        name: form.name.trim(),
-        email: fullEmail,
-        password: form.password,
-        student_number: form.student_number.trim(),
-        department: form.department,
-      });
-
-      setNotice("Registration submitted. Please wait for admin approval.");
-      setTimeout(() => nav("/login"), 1200);
+      await apiRequestRegistrationOtp(registrationPayload());
+      setOtpEmail(fullEmail);
+      setOtpSent(true);
+      setNotice("OTP sent. Please check your CVSU email.");
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Registration failed");
     } finally {
@@ -198,6 +236,7 @@ export default function RegisterStudentPage() {
                       }
                       required
                       maxLength={50}
+                      disabled={otpSent}
                       placeholder="e.g. Juan D. Cruz"
                     />
                   </div>
@@ -222,6 +261,7 @@ export default function RegisterStudentPage() {
                         })
                       }
                       required
+                      disabled={otpSent}
                       placeholder="juan.delacruz"
                     />
                     <div className="border-l border-white/20 bg-white/10 px-3 py-3 text-sm text-white/80">
@@ -250,6 +290,7 @@ export default function RegisterStudentPage() {
                       }
                       required
                       minLength={8}
+                      disabled={otpSent}
                     />
                     <button
                       type="button"
@@ -299,6 +340,7 @@ export default function RegisterStudentPage() {
                       maxLength={9}
                       pattern="\d{9}"
                       title="Student number must be exactly 9 digits."
+                      disabled={otpSent}
                     />
                   </div>
                 </div>
@@ -316,6 +358,7 @@ export default function RegisterStudentPage() {
                       value={form.department}
                       onChange={(e) => setForm({ ...form, department: e.target.value })}
                       required
+                      disabled={otpSent}
                     >
                       <option value="" disabled className="text-slate-900">
                         Select course
@@ -328,6 +371,38 @@ export default function RegisterStudentPage() {
                     </select>
                   </div>
                 </div>
+
+
+                {otpSent ? (
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium text-white/90" htmlFor="otp">
+                        Email OTP
+                      </label>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-white hover:underline disabled:opacity-60"
+                        onClick={editDetails}
+                        disabled={loading}
+                      >
+                        Edit details
+                      </button>
+                    </div>
+                    <input
+                      id="otp"
+                      className="mt-1 w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="000000"
+                      required
+                    />
+                    <div className="mt-1 text-xs text-white/70">
+                      Enter the 6-digit code sent to {otpEmail || fullEmail}.
+                    </div>
+                  </div>
+                ) : null}
 
 
                 {notice ? (
@@ -345,7 +420,7 @@ export default function RegisterStudentPage() {
                   className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
                   disabled={loading}
                 >
-                  {loading ? "Submitting…" : "Sign Up"}
+                  {loading ? "Submitting..." : otpSent ? "Verify OTP and Create Account" : "Send OTP"}
                 </button>
 
                 <div className="text-center text-sm text-white/90">

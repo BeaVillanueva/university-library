@@ -134,6 +134,76 @@ final class AuthController {
     return implode(' ', $out);
   }
 
+  private static function ensureRegistrationOtpTable(PDO $pdo): void {
+    $pdo->exec("
+      CREATE TABLE IF NOT EXISTS registration_otps (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(190) NOT NULL,
+        student_number VARCHAR(50) NOT NULL,
+        payload_json TEXT NOT NULL,
+        otp_hash VARCHAR(255) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_registration_otps_email (email),
+        INDEX idx_registration_otps_expires_at (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+  }
+
+  private static function registrationPayloadFromBody(array $b): array {
+    $nameRaw = trim((string)($b['name'] ?? ''));
+    $email = trim((string)($b['email'] ?? ''));
+    $password = (string)($b['password'] ?? '');
+    $studentNumber = trim((string)($b['student_number'] ?? ''));
+    $department = trim((string)($b['department'] ?? ''));
+
+    if ($nameRaw === '' || $email === '' || $password === '') Http::error('name, email, password required', 422);
+
+    self::ensureValidName($nameRaw);
+    $name = self::titleCaseName($nameRaw);
+
+    self::ensureNoForbidden('Email', $email);
+    self::ensureNoForbidden('Student number', $studentNumber);
+    self::ensureNoForbidden('Department', $department);
+
+    self::ensureEmailDomain($email, '@cvsu.edu.ph');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Invalid email', 422);
+    if ($studentNumber === '') Http::error('student_number is required', 422);
+    if ($department === '') Http::error('department is required', 422);
+
+    if (strlen($password) < 8) Http::error('Password must be at least 8 characters', 422);
+    self::ensureNoForbidden('Password', $password);
+
+    return [
+      'name' => $name,
+      'email' => $email,
+      'password' => $password,
+      'student_number' => $studentNumber,
+      'department' => $department,
+    ];
+  }
+
+  private static function ensureStudentCanRegister(PDO $pdo, string $email, string $studentNumber): ?array {
+    $stmtExisting = $pdo->prepare("
+      SELECT id, email, student_number, role, status
+      FROM users
+      WHERE email = ? OR student_number = ?
+      ORDER BY (email = ?) DESC
+      LIMIT 1
+    ");
+    $stmtExisting->execute([$email, $studentNumber, $email]);
+    $existing = $stmtExisting->fetch();
+
+    if (!$existing) return null;
+
+    if ((string)$existing['role'] === 'student' && (string)$existing['status'] === 'disabled') {
+      return $existing;
+    }
+
+    Http::error('Email or student number already exists', 409);
+  }
+
   public static function login(PDO $pdo, array $config): void {
     $body = Http::readJsonBody();
     $email = trim((string)($body['email'] ?? ''));
@@ -313,53 +383,91 @@ final class AuthController {
     ]);
   }
 
+  public static function requestRegistrationOtp(PDO $pdo, array $config): void {
+    $b = Http::readJsonBody();
+    $payload = self::registrationPayloadFromBody($b);
+    self::ensureStudentCanRegister($pdo, $payload['email'], $payload['student_number']);
+    self::ensureRegistrationOtpTable($pdo);
+    $payload['password_hash'] = password_hash((string)$payload['password'], PASSWORD_DEFAULT);
+    unset($payload['password']);
+
+    $otp = (string)random_int(100000, 999999);
+    $expiresAt = (new DateTimeImmutable('+10 minutes'))->format('Y-m-d H:i:s');
+
+    $pdo->prepare("DELETE FROM registration_otps WHERE email = ? OR student_number = ?")
+      ->execute([$payload['email'], $payload['student_number']]);
+
+    $pdo->prepare("
+      INSERT INTO registration_otps (email, student_number, payload_json, otp_hash, expires_at)
+      VALUES (?,?,?,?,?)
+    ")->execute([
+      $payload['email'],
+      $payload['student_number'],
+      json_encode($payload, JSON_UNESCAPED_SLASHES),
+      password_hash($otp, PASSWORD_DEFAULT),
+      $expiresAt,
+    ]);
+
+    $subject = 'Your CVSU Library registration OTP';
+    $html = '
+      <div style="font-family:Arial,sans-serif; line-height:1.6">
+        <h2>Registration Verification</h2>
+        <p>Use this OTP to complete your CVSU Imus Library account registration:</p>
+        <p style="font-size:28px; font-weight:bold; letter-spacing:4px;">' . htmlspecialchars($otp, ENT_QUOTES, 'UTF-8') . '</p>
+        <p>This code will expire in <b>10 minutes</b>.</p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    ';
+    $text = "Your CVSU Library registration OTP is {$otp}. It expires in 10 minutes.";
+
+    Mailer::send($config['app_script_mail'] ?? [], $payload['email'], $payload['name'], $subject, $html, $text);
+
+    Http::ok([
+      'message' => 'OTP sent. Please check your CVSU email.',
+      'email' => $payload['email'],
+      'expires_at' => $expiresAt,
+    ]);
+  }
+
   public static function registerStudent(PDO $pdo, array $config): void {
     $b = Http::readJsonBody();
-
-    $nameRaw = trim((string)($b['name'] ?? ''));
     $email = trim((string)($b['email'] ?? ''));
-    $password = (string)($b['password'] ?? '');
+    $otp = preg_replace('/\D+/', '', (string)($b['otp'] ?? '')) ?? '';
 
-    $studentNumber = trim((string)($b['student_number'] ?? ''));
-    $department = trim((string)($b['department'] ?? ''));
-
-    if ($nameRaw === '' || $email === '' || $password === '') Http::error('name, email, password required', 422);
-
-    self::ensureValidName($nameRaw);
-    $name = self::titleCaseName($nameRaw);
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Valid email required', 422);
+    if ($otp === '') Http::error('OTP is required', 422);
 
     self::ensureNoForbidden('Email', $email);
-    self::ensureNoForbidden('Student number', $studentNumber);
-    self::ensureNoForbidden('Department', $department);
-
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
+    self::ensureRegistrationOtpTable($pdo);
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Invalid email', 422);
-    if ($studentNumber === '') Http::error('student_number is required', 422);
-    if ($department === '') Http::error('department is required', 422);
-
-    if (strlen($password) < 8) Http::error('Password must be at least 8 characters', 422);
-    self::ensureNoForbidden('Password', $password);
-
-    $hash = password_hash($password, PASSWORD_DEFAULT);
-
-    // revive disabled student (by email OR student_number)
-    $stmtExisting = $pdo->prepare("
-      SELECT id, email, student_number, role, status
-      FROM users
-      WHERE email = ? OR student_number = ?
-      ORDER BY (email = ?) DESC
+    $stmtOtp = $pdo->prepare("
+      SELECT id, email, student_number, payload_json, otp_hash, expires_at
+      FROM registration_otps
+      WHERE email = ?
+      ORDER BY id DESC
       LIMIT 1
     ");
-    $stmtExisting->execute([$email, $studentNumber, $email]);
-    $existing = $stmtExisting->fetch();
+    $stmtOtp->execute([$email]);
+    $row = $stmtOtp->fetch();
 
-    if ($existing) {
-      $existingId = (int)$existing['id'];
-      $existingRole = (string)$existing['role'];
-      $existingStatus = (string)$existing['status'];
+    if (!$row) Http::error('Please request an OTP first.', 400);
+    if (strtotime((string)$row['expires_at']) < time()) {
+      $pdo->prepare("DELETE FROM registration_otps WHERE id = ?")->execute([(int)$row['id']]);
+      Http::error('OTP expired. Please request a new OTP.', 400);
+    }
+    if (!password_verify($otp, (string)$row['otp_hash'])) Http::error('Invalid OTP', 400);
 
-      if ($existingRole === 'student' && $existingStatus === 'disabled') {
+    $payload = json_decode((string)$row['payload_json'], true);
+    if (!is_array($payload)) Http::error('Invalid registration request. Please request a new OTP.', 400);
+
+    $existing = self::ensureStudentCanRegister($pdo, (string)$payload['email'], (string)$payload['student_number']);
+    $hash = (string)($payload['password_hash'] ?? '');
+    if ($hash === '') Http::error('Invalid registration request. Please request a new OTP.', 400);
+
+    try {
+      if ($existing) {
+        $existingId = (int)$existing['id'];
         $stmtUpd = $pdo->prepare("
           UPDATE users
           SET name = ?,
@@ -367,10 +475,17 @@ final class AuthController {
               password_hash = ?,
               department = ?,
               student_number = ?,
-              status = 'pending'
+              status = 'approved'
           WHERE id = ?
         ");
-        $stmtUpd->execute([$name, $email, $hash, $department, $studentNumber, $existingId]);
+        $stmtUpd->execute([
+          (string)$payload['name'],
+          (string)$payload['email'],
+          $hash,
+          (string)$payload['department'],
+          (string)$payload['student_number'],
+          $existingId,
+        ]);
 
         ActivityLogger::log($pdo, [
           'actor_user_id' => null,
@@ -379,33 +494,43 @@ final class AuthController {
           'entity_id' => $existingId,
           'details' => [
             'target_user_id' => $existingId,
-            'target_email' => $email,
+            'target_email' => (string)$payload['email'],
             'target_role' => 'student',
-            'target_department' => $department,
-            'target_student_number' => $studentNumber,
+            'target_department' => (string)$payload['department'],
+            'target_student_number' => (string)$payload['student_number'],
             'from_status' => 'disabled',
-            'to_status' => 'pending',
+            'to_status' => 'approved',
+            'verified_by' => 'otp',
           ],
         ]);
 
+        $pdo->prepare("DELETE FROM registration_otps WHERE id = ? OR email = ?")
+          ->execute([(int)$row['id'], (string)$payload['email']]);
+
         Http::ok([
           'id' => $existingId,
-          'message' => 'Registration submitted. Please wait for admin approval.'
+          'message' => 'Registration verified. You can now log in.'
         ], 201);
         return;
       }
 
-      Http::error('Email or student number already exists', 409);
-    }
-
-    try {
       $stmt = $pdo->prepare("
         INSERT INTO users (name, email, password_hash, role, department, student_number, status)
         VALUES (?,?,?,?,?,?,?)
       ");
-      $stmt->execute([$name, $email, $hash, 'student', $department, $studentNumber, 'pending']);
+      $stmt->execute([
+        (string)$payload['name'],
+        (string)$payload['email'],
+        $hash,
+        'student',
+        (string)$payload['department'],
+        (string)$payload['student_number'],
+        'approved',
+      ]);
 
       $newId = (int)$pdo->lastInsertId();
+      $pdo->prepare("DELETE FROM registration_otps WHERE id = ? OR email = ?")
+        ->execute([(int)$row['id'], (string)$payload['email']]);
 
       ActivityLogger::log($pdo, [
         'actor_user_id' => null,
@@ -414,17 +539,18 @@ final class AuthController {
         'entity_id' => $newId,
         'details' => [
           'target_user_id' => $newId,
-          'target_email' => $email,
+          'target_email' => (string)$payload['email'],
           'target_role' => 'student',
-          'target_department' => $department,
-          'target_student_number' => $studentNumber,
-          'status' => 'pending',
+          'target_department' => (string)$payload['department'],
+          'target_student_number' => (string)$payload['student_number'],
+          'status' => 'approved',
+          'verified_by' => 'otp',
         ],
       ]);
 
       Http::ok([
         'id' => $newId,
-        'message' => 'Registration submitted. Please wait for admin approval.'
+        'message' => 'Registration verified. You can now log in.'
       ], 201);
     } catch (PDOException $e) {
       Http::error('Failed to register (email or student number may already exist)', 409);
