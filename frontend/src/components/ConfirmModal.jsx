@@ -40,7 +40,7 @@ export default function ConfirmModal({
             onClick={onConfirm}
             disabled={loading}
           >
-            {loading ? "Working..." : confirmText}
+            {loading ? "Loading..." : confirmText}
           </button>
         </div>
       </div>

@@ -347,17 +347,8 @@ export default function BooksPage() {
 
   // ✅ Filter list on the frontend for new availability categories
   const filteredItems = useMemo(() => {
-    const a = String(availability || "").toLowerCase();
-    if (!a) return items;
-
-    return (items || []).filter((b) => {
-      const avail = Number(b?.copies_available ?? 0);
-      if (a === "available") return avail >= 4;
-      if (a === "low") return avail > 0 && avail <= 3;
-      if (a === "unavailable") return avail === 0;
-      return true;
-    });
-  }, [items, availability]);
+    return items || [];
+  }, [items]);
 
   return (
     <div>
@@ -700,8 +691,8 @@ export default function BooksPage() {
 
                         {canBorrow ? (
                           <button
-                            className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                            disabled={b.copies_available <= 0 || queueFull}
+                            className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+                            disabled={Number(b.copies_available ?? 0) <= 0 || queueFull}
                             onClick={() => handleBorrow(b.id)}
                             aria-label={`Borrow ${b.title}`}
                             type="button"

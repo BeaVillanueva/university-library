@@ -63,7 +63,7 @@ export default function PromptModal({
             onClick={() => onConfirm?.(value)}
             disabled={loading}
           >
-            {loading ? "Working..." : confirmText}
+            {loading ? "Loading..." : confirmText}
           </button>
         </div>
       </div>

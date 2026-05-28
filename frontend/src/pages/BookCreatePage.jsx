@@ -141,12 +141,12 @@ export default function BookCreatePage() {
           <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
 
           {/* Cover Preview */}
-          <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+          <div className="mb-4 flex h-[340px] w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
             {coverFile ? (
               <img
                 src={URL.createObjectURL(coverFile)}
                 alt="Cover preview"
-                className="w-full h-full object-cover"
+                className="h-full w-full object-contain p-3"
               />
             ) : (
               <div className="text-slate-400 text-center">

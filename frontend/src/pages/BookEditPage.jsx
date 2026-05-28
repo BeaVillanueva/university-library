@@ -200,12 +200,12 @@ export default function BookEditPage() {
           <h2 className="text-lg font-semibold mb-4">Book Cover</h2>
 
           {/* Cover Preview */}
-          <div className="mb-4 h-64 w-full bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+          <div className="mb-4 flex h-[340px] w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
             {coverSrc ? (
               <img
                 src={coverSrc}
                 alt={book.title}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-contain p-3"
                 loading="lazy"
                 onError={(e) => {
                   // If served image breaks, fall back to no cover UI
@@ -215,7 +215,7 @@ export default function BookEditPage() {
             ) : (
               <div className="text-slate-400 text-center">
                 <div className="text-5xl">📖</div>
-                <p className="text-sm mt-2">No Cover</p>
+                <p className="text-sm mt-2">No Cover Selected</p>
               </div>
             )}
           </div>

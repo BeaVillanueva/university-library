@@ -10,7 +10,7 @@ final class BooksController {
 
     $q = Query::str('q', '');
     $categoryId = Query::int('category_id', 0, 0);
-    $availability = Query::str('availability', ''); // 'available' | 'unavailable' | ''
+    $availability = Query::str('availability', ''); // 'available' | 'low' | 'unavailable' | ''
 
     $where = [];
     $params = [];
@@ -26,7 +26,8 @@ final class BooksController {
       $params[] = $categoryId;
     }
 
-    if ($availability === 'available') $where[] = "b.copies_available > 0";
+    if ($availability === 'available') $where[] = "b.copies_available > 3";
+    if ($availability === 'low') $where[] = "b.copies_available BETWEEN 1 AND 3";
     if ($availability === 'unavailable') $where[] = "b.copies_available <= 0";
 
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
