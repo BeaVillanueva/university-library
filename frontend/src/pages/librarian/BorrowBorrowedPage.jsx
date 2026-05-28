@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import Pagination from "../../components/Pagination.jsx";
+import ConfirmModal from "../../components/ConfirmModal.jsx";
+import MessageModal from "../../components/MessageModal.jsx";
 import { apiListAllBorrows, apiReturnBorrow } from "../../api/borrow.js";
 
 function fmt(s) {
@@ -43,6 +45,8 @@ export default function BorrowBorrowedPage() {
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isReturning, setIsReturning] = useState(false);
+  const [returnTarget, setReturnTarget] = useState(null);
+  const [message, setMessage] = useState(null);
 
   // ✅ status=active => borrowed + overdue (return_date IS NULL)
   const params = useMemo(
@@ -92,29 +96,44 @@ export default function BorrowBorrowedPage() {
     else setSelectedIds(new Set(items.map((item) => item.id)));
   }
 
-  // Return single book
-  async function onReturn(id) {
-    if (!confirm("Mark this book as returned?")) return;
+  function showMessage(title, body, tone = "success") {
+    setMessage({ title, body, tone });
+  }
+
+  async function returnOne(id) {
+    setIsReturning(true);
     try {
       await apiReturnBorrow(id);
       setSuccess("Book returned successfully.");
       voiceAccessibility.announceSuccess("Book returned successfully.");
+      showMessage("Book returned", "The book was marked as returned.");
       await load();
     } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "Return failed.");
+      const msg = e?.response?.data?.error || e?.message || "Return failed.";
+      setErr(msg);
+      showMessage("Return failed", msg, "error");
+    } finally {
+      setIsReturning(false);
+      setReturnTarget(null);
     }
+  }
+
+  function onReturn(id) {
+    setReturnTarget({ type: "single", id, count: 1 });
   }
 
   // Bulk return selected books
   async function onBulkReturn() {
     if (selectedIds.size === 0) {
       setErr("Please select at least one book to return.");
+      showMessage("No books selected", "Please select at least one book to return.", "error");
       return;
     }
 
-    const count = selectedIds.size;
-    if (!confirm(`Return ${count} book(s)? This action cannot be undone.`)) return;
+    setReturnTarget({ type: "bulk", count: selectedIds.size });
+  }
 
+  async function bulkReturnSelected() {
     setIsReturning(true);
     setErr("");
     setSuccess("");
@@ -136,17 +155,20 @@ export default function BorrowBorrowedPage() {
     setIsReturning(false);
 
     if (failCount === 0) {
-      setSuccess(`✓ All ${successCount} book(s) returned successfully!`);
+      setSuccess(`All ${successCount} book(s) returned successfully!`);
+      showMessage("Books returned", `All ${successCount} book(s) returned successfully.`);
       setSelectedIds(new Set());
       await load();
     } else {
       const msg =
         successCount > 0
-          ? `✓ ${successCount} returned, ✗ ${failCount} failed: ${failed.slice(0, 2).join("; ")}`
-          : `✗ Failed to return: ${failed.slice(0, 2).join("; ")}`;
+          ? `${successCount} returned, ${failCount} failed: ${failed.slice(0, 2).join("; ")}`
+          : `Failed to return: ${failed.slice(0, 2).join("; ")}`;
       setErr(msg);
+      showMessage("Some returns failed", msg, "error");
       await load();
     }
+    setReturnTarget(null);
   }
 
   return (
@@ -367,6 +389,31 @@ export default function BorrowBorrowedPage() {
       <div className="mt-4">
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
+      <ConfirmModal
+        open={Boolean(returnTarget)}
+        title={returnTarget?.type === "bulk" ? "Return selected books?" : "Return book?"}
+        message={
+          returnTarget?.type === "bulk"
+            ? `Return ${returnTarget?.count || 0} book(s)? This action cannot be undone.`
+            : "Mark this book as returned?"
+        }
+        confirmText="Return"
+        tone="primary"
+        loading={isReturning}
+        onCancel={() => setReturnTarget(null)}
+        onConfirm={() =>
+          returnTarget?.type === "bulk"
+            ? bulkReturnSelected()
+            : returnOne(returnTarget.id)
+        }
+      />
+      <MessageModal
+        open={Boolean(message)}
+        title={message?.title || ""}
+        message={message?.body || ""}
+        tone={message?.tone || "success"}
+        onClose={() => setMessage(null)}
+      />
     </div>
   );
 }

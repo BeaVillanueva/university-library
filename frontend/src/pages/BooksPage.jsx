@@ -9,6 +9,9 @@ import { useDebounceAnnounce } from "../hooks/useDebounceAnnounce";
 import { voiceAccessibility } from "../utils/voiceAccessibility";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
+import ConfirmModal from "../components/ConfirmModal";
+import MessageModal from "../components/MessageModal";
+import PromptModal from "../components/PromptModal";
 import TextToSpeechButton from "../components/TextToSpeechButton";
 import { FiBookOpen, FiCalendar, FiAlertCircle, FiX } from "react-icons/fi";
 
@@ -52,6 +55,9 @@ export default function BooksPage() {
   const [myBorrows, setMyBorrows] = useState([]);
   const [myBorrowsLoading, setMyBorrowsLoading] = useState(false);
   const [borrowCovers, setBorrowCovers] = useState({}); // ✅ Cache for cover URLs
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [stockTarget, setStockTarget] = useState(null);
+  const [message, setMessage] = useState(null);
 
   // ✅ Track if search was already announced to prevent repeats
   const lastSearchRef = useRef(null);
@@ -211,8 +217,11 @@ export default function BooksPage() {
     }
   }
 
-  async function handleCancelPending(recordId) {
-    if (!confirm("Cancel this pending borrow request?")) return;
+  function showMessage(title, body, tone = "success") {
+    setMessage({ title, body, tone });
+  }
+
+  async function cancelPending(recordId) {
 
     setError("");
     setNotice("");
@@ -222,21 +231,27 @@ export default function BooksPage() {
       // ✅ Announce cancellation
       voiceAccessibility.announceSuccess("Pending request cancelled.");
       setNotice("Pending request cancelled.");
+      showMessage("Request cancelled", "Pending request cancelled.");
       await loadMyBorrows();
     } catch (e) {
       const msg = e?.response?.data?.error || e?.message || "Cancel failed.";
       voiceAccessibility.announceError(msg);
       setError(msg);
+      showMessage("Cancel failed", msg, "error");
+    } finally {
+      setCancelTarget(null);
     }
   }
 
-  async function handleAddStock(bookId) {
-    const raw = prompt("Add how many copies? (number)");
-    if (raw === null) return;
+  function handleCancelPending(recordId) {
+    setCancelTarget({ id: recordId });
+  }
 
+  async function addStock(bookId, raw) {
     const qty = Number(raw);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError("Invalid quantity.");
+      showMessage("Invalid quantity", "Enter a positive number of copies.", "error");
       return;
     }
 
@@ -247,12 +262,20 @@ export default function BooksPage() {
       // ✅ Announce stock added
       voiceAccessibility.announceSuccess("Stock added successfully.");
       setNotice("Stock added successfully.");
+      showMessage("Stock added", "Stock added successfully.");
       await refreshBooks();
     } catch (e) {
       const msg = e?.response?.data?.error || e?.message || "Failed to add stock";
       voiceAccessibility.announceError(msg);
       setError(msg);
+      showMessage("Stock update failed", msg, "error");
+    } finally {
+      setStockTarget(null);
     }
+  }
+
+  function handleAddStock(bookId) {
+    setStockTarget({ id: bookId });
   }
 
   function resetFilters() {
@@ -714,6 +737,33 @@ export default function BooksPage() {
           </>
         )}
       </div>
+      <ConfirmModal
+        open={Boolean(cancelTarget)}
+        title="Cancel request?"
+        message="Cancel this pending borrow request?"
+        confirmText="Cancel request"
+        tone="danger"
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={() => cancelTarget && cancelPending(cancelTarget.id)}
+      />
+      <PromptModal
+        open={Boolean(stockTarget)}
+        title="Add stock"
+        message="Enter how many copies to add."
+        label="Copies"
+        placeholder="Number of copies"
+        inputMode="numeric"
+        confirmText="Add"
+        onCancel={() => setStockTarget(null)}
+        onConfirm={(value) => stockTarget && addStock(stockTarget.id, value)}
+      />
+      <MessageModal
+        open={Boolean(message)}
+        title={message?.title || ""}
+        message={message?.body || ""}
+        tone={message?.tone || "success"}
+        onClose={() => setMessage(null)}
+      />
     </div>
   );
 }

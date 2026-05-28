@@ -3,8 +3,6 @@ const IDLE_MS = parseInt(import.meta.env.VITE_IDLE_TIMEOUT_MS || "180000", 10);
 let timer = null;
 
 function logoutNow() {
-  console.log("[idleLogout] User inactive. Logging out...");
-
   localStorage.removeItem("ulms_token");
   localStorage.removeItem("ulms_user");
 
@@ -21,10 +19,6 @@ function resetTimer() {
 }
 
 export function startIdleLogout() {
-  console.log(
-    `[idleLogout] Started. User will be logged out after ${IDLE_MS / 60000} minutes of inactivity.`
-  );
-
   resetTimer();
 
   const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];

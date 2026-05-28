@@ -8,7 +8,8 @@ final class OverdueService {
       SET status = 'overdue'
       WHERE status = 'borrowed'
         AND return_date IS NULL
-        AND due_date < CURDATE()
+        -- TEMP TESTING: overdue after 1 day
+        AND due_date <= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
     ");
 
     $pdo->exec("
@@ -16,7 +17,8 @@ final class OverdueService {
       SET status = 'borrowed'
       WHERE status = 'overdue'
         AND return_date IS NULL
-        AND due_date >= CURDATE()
+        -- TEMP TESTING: overdue after 1 day
+        AND due_date > DATE_SUB(CURDATE(), INTERVAL 1 DAY)
     ");
 
     self::createOverdueNotifications($pdo, $config);

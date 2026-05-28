@@ -5,6 +5,8 @@ import {
   apiDeclineBorrow,
   apiListAllBorrows,
 } from "../../api/borrow.js";
+import ConfirmModal from "../../components/ConfirmModal.jsx";
+import MessageModal from "../../components/MessageModal.jsx";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
 
@@ -35,6 +37,9 @@ export default function BorrowPendingPage() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [message, setMessage] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [working, setWorking] = useState(false);
 
   const params = useMemo(() => ({ status: "pending", page, limit: 10 }), [page]);
 
@@ -84,44 +89,60 @@ export default function BorrowPendingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  async function onApprove(id) {
-    if (!confirm("Approve this borrow request?")) return;
+  function showMessage(title, body, tone = "success") {
+    setMessage({ title, body, tone });
+  }
 
+  async function approveOne(id) {
+    setWorking(true);
     try {
       await apiApproveBorrow(id);
       voiceAccessibility.announceSuccess("Borrow request approved.");
+      showMessage("Borrow approved", "The selected borrow request was approved.");
       await load();
     } catch (e) {
       const msg = e?.response?.data?.error || e?.message || "Approve failed.";
       voiceAccessibility.announceError(msg);
-      alert(msg);
+      showMessage("Approve failed", msg, "error");
+    } finally {
+      setWorking(false);
+      setConfirmAction(null);
     }
   }
 
-  async function onDecline(id) {
-    const reason = prompt("Reason (optional):") || "";
-    if (!confirm("Decline this borrow request?")) return;
-
+  async function declineMany(ids, reason = "") {
+    setWorking(true);
     try {
-      await apiDeclineBorrow(id, reason);
-      voiceAccessibility.announceSuccess("Borrow request declined.");
+      for (const id of ids) {
+        await apiDeclineBorrow(id, reason);
+      }
+      const count = ids.length;
+      voiceAccessibility.announceSuccess(`${count} borrow request(s) declined.`);
+      showMessage("Borrow request declined", `${count} borrow request(s) declined.`);
+      setSelectedIds(new Set());
       await load();
     } catch (e) {
       const msg = e?.response?.data?.error || e?.message || "Decline failed.";
       voiceAccessibility.announceError(msg);
-      alert(msg);
+      showMessage("Decline failed", msg, "error");
+    } finally {
+      setWorking(false);
+      setConfirmAction(null);
     }
   }
 
   async function bulkApprove() {
     if (selectedIds.size === 0) {
-      alert("No requests selected");
+      showMessage("No requests selected", "Select at least one borrow request first.", "error");
       return;
     }
 
-    if (!confirm(`Approve ${selectedIds.size} borrow request(s)?`)) return;
+    setConfirmAction({ type: "bulk-approve", count: selectedIds.size });
+  }
 
+  async function approveSelected() {
     setLoading(true);
+    setWorking(true);
 
     try {
       for (const id of selectedIds) {
@@ -131,6 +152,7 @@ export default function BorrowPendingPage() {
       voiceAccessibility.announceSuccess(
         `${selectedIds.size} borrow request(s) approved.`
       );
+      showMessage("Borrow requests approved", `${selectedIds.size} borrow request(s) approved.`);
 
       setSelectedIds(new Set());
       await load();
@@ -139,6 +161,54 @@ export default function BorrowPendingPage() {
       voiceAccessibility.announceError(msg);
       setErr(msg);
       setLoading(false);
+      showMessage("Bulk approve failed", msg, "error");
+    } finally {
+      setWorking(false);
+      setConfirmAction(null);
+    }
+  }
+
+  function bulkDecline() {
+    if (selectedIds.size === 0) {
+      showMessage("No requests selected", "Select at least one borrow request first.", "error");
+      return;
+    }
+    setConfirmAction({ type: "bulk-decline", count: selectedIds.size });
+  }
+
+  function onApprove(id) {
+    setConfirmAction({ type: "approve", id });
+  }
+
+  function onDecline(id) {
+    setConfirmAction({ type: "decline", ids: [id], count: 1 });
+  }
+
+  function confirmTitle() {
+    if (confirmAction?.type === "approve") return "Approve request?";
+    if (confirmAction?.type === "bulk-approve") return "Approve selected requests?";
+    if (confirmAction?.type === "decline") return "Decline request?";
+    if (confirmAction?.type === "bulk-decline") return "Decline selected requests?";
+    return "";
+  }
+
+  function confirmMessage() {
+    if (confirmAction?.type === "approve") return "This borrow request will move to borrowed records.";
+    if (confirmAction?.type === "bulk-approve") return `Approve ${confirmAction.count} borrow request(s)?`;
+    if (confirmAction?.type === "decline") return "This borrow request will be declined.";
+    if (confirmAction?.type === "bulk-decline") return `Decline ${confirmAction.count} selected borrow request(s)?`;
+    return "";
+  }
+
+  async function runConfirm() {
+    if (confirmAction?.type === "approve") {
+      await approveOne(confirmAction.id);
+    } else if (confirmAction?.type === "bulk-approve") {
+      await approveSelected();
+    } else if (confirmAction?.type === "decline") {
+      await declineMany(confirmAction.ids || [], "");
+    } else if (confirmAction?.type === "bulk-decline") {
+      await declineMany(Array.from(selectedIds), "");
     }
   }
 
@@ -205,14 +275,24 @@ export default function BorrowPendingPage() {
           </div>
 
           {selectedIds.size > 0 && (
-            <button
-              type="button"
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-              onClick={bulkApprove}
-              disabled={loading}
-            >
-              Approve Selected ({selectedIds.size})
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                onClick={bulkApprove}
+                disabled={loading}
+              >
+                Approve Selected ({selectedIds.size})
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                onClick={bulkDecline}
+                disabled={loading}
+              >
+                Decline Selected ({selectedIds.size})
+              </button>
+            </div>
           )}
         </div>
 
@@ -336,6 +416,25 @@ export default function BorrowPendingPage() {
       <div className="mt-4">
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
+      <ConfirmModal
+        open={Boolean(confirmAction)}
+        title={confirmTitle()}
+        message={confirmMessage()}
+        confirmText={
+          confirmAction?.type?.includes("decline") ? "Decline" : "Approve"
+        }
+        tone={confirmAction?.type?.includes("decline") ? "danger" : "primary"}
+        loading={working}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={runConfirm}
+      />
+      <MessageModal
+        open={Boolean(message)}
+        title={message?.title || ""}
+        message={message?.body || ""}
+        tone={message?.tone || "success"}
+        onClose={() => setMessage(null)}
+      />
     </div>
   );
 }

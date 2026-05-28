@@ -12,7 +12,6 @@ export function useIdleTimer(onIdle, timeoutMs = 30 * 60 * 1000) {
       if (timeoutId) clearTimeout(timeoutId);
       
       timeoutId = setTimeout(() => {
-        console.log('[IDLE] User has been idle for 30 minutes');
         if (onIdle) onIdle();
       }, timeoutMs);
     };

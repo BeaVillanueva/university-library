@@ -6,10 +6,21 @@ final class UsersController {
     $page = Query::int('page', 1, 1);
     $limit = Query::int('limit', 10, 1, 100);
     $q = Query::str('q', '');
+    $statusFilter = Query::str('status', 'active');
 
     $offset = ($page - 1) * $limit;
 
-    $whereParts = ["status != 'disabled'"];
+    if (!in_array($statusFilter, ['active', 'archived', 'all'], true)) {
+      $statusFilter = 'active';
+    }
+
+    if ($statusFilter === 'archived') {
+      $whereParts = ["status = 'archived'"];
+    } else if ($statusFilter === 'all') {
+      $whereParts = ["1=1"];
+    } else {
+      $whereParts = ["status NOT IN ('disabled', 'archived')"];
+    }
     $params = [];
 
     if ($q !== '') {
@@ -239,7 +250,7 @@ final class UsersController {
     $studentNumber = array_key_exists('student_number', $b) ? trim((string)$b['student_number']) : null;
 
     $status = array_key_exists('status', $b) ? trim((string)$b['status']) : null;
-    if ($status !== null && !in_array($status, ['pending', 'approved', 'disabled'], true)) {
+    if ($status !== null && !in_array($status, ['pending', 'approved', 'disabled', 'archived'], true)) {
       Http::error('Invalid status', 422);
     }
 
@@ -347,22 +358,27 @@ final class UsersController {
       ]);
 
       Http::error(
-        "Cannot delete user with active borrow records ({$activeBorrows}). Please resolve all pending, borrowed, or overdue books first.",
+        "Cannot archive user with active borrow records ({$activeBorrows}). Please resolve all pending, borrowed, or overdue books first.",
         409,
         ['active_borrow_count' => $activeBorrows]
       );
     }
 
-    $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+    if ((string)$old['status'] === 'archived') {
+      Http::ok(['message' => 'User is already archived.']);
+      return;
+    }
+
+    $stmt = $pdo->prepare("UPDATE users SET status = 'archived' WHERE id = ?");
     $stmt->execute([$id]);
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => $actorId,
-      'action' => 'users.delete',
+      'action' => 'users.archive',
       'entity_type' => 'user',
       'entity_id' => $id,
       'details' => [
-        'deleted' => ($stmt->rowCount() > 0),
+        'archived' => ($stmt->rowCount() > 0),
         'target_user_id' => $id,
         'target_name' => $old ? (string)$old['name'] : null,
         'target_email' => $old ? (string)$old['email'] : null,
@@ -370,9 +386,10 @@ final class UsersController {
         'target_department' => $old ? ($old['department'] ?? null) : null,
         'target_student_number' => $old ? ($old['student_number'] ?? null) : null,
         'target_status' => $old ? ($old['status'] ?? null) : null,
+        'to_status' => 'archived',
       ],
     ]);
 
-    Http::ok();
+    Http::ok(['message' => 'User archived.']);
   }
 }

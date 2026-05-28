@@ -154,6 +154,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="admin/users/archived"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="admin/categories"

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRegisterStudent, apiRequestRegistrationOtp } from "../api/auth";
 import { useUi } from "../state/UiContext";
@@ -98,8 +98,17 @@ export default function RegisterStudentPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpEmail, setOtpEmail] = useState("");
+  const [resendSeconds, setResendSeconds] = useState(0);
 
   const fullEmail = form.emailLocal ? `${form.emailLocal}${EMAIL_DOMAIN}` : "";
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = setInterval(() => {
+      setResendSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
 
   function validate() {
     const name = form.name.trim();
@@ -143,8 +152,31 @@ export default function RegisterStudentPage() {
     setOtpSent(false);
     setOtp("");
     setOtpEmail("");
+    setResendSeconds(0);
     setNotice("");
     setError("");
+  }
+
+  async function sendRegistrationCode() {
+    const msg = validate();
+    if (msg) {
+      setError(msg);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiRequestRegistrationOtp(registrationPayload());
+      setOtpEmail(fullEmail);
+      setOtpSent(true);
+      setOtp("");
+      setResendSeconds(30);
+      setNotice("Authentication code sent. Please check your CVSU email. It expires in 15 minutes.");
+    } catch (e2) {
+      setError(e2?.response?.data?.error || e2?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onSubmit(e) {
@@ -175,23 +207,7 @@ export default function RegisterStudentPage() {
       return;
     }
 
-    const msg = validate();
-    if (msg) {
-      setError(msg);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await apiRequestRegistrationOtp(registrationPayload());
-      setOtpEmail(fullEmail);
-      setOtpSent(true);
-      setNotice("Authentication code sent. Please check your CVSU email.");
-    } catch (e2) {
-      setError(e2?.response?.data?.error || e2?.message || "Registration failed");
-    } finally {
-      setLoading(false);
-    }
+    await sendRegistrationCode();
   }
 
   return (
@@ -402,9 +418,21 @@ export default function RegisterStudentPage() {
                   />
                   <div className="mt-1 text-xs text-white/70">
                     {otpSent
-                      ? `Enter the 6-digit code sent to ${otpEmail || fullEmail}.`
+                      ? `Enter the 6-digit code sent to ${otpEmail || fullEmail}. It expires in 15 minutes.`
                       : "Click Send Authentication Code first. Only @cvsu.edu.ph emails can receive a code."}
                   </div>
+                  {otpSent ? (
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-semibold text-white hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={sendRegistrationCode}
+                      disabled={loading || resendSeconds > 0}
+                    >
+                      {resendSeconds > 0
+                        ? `Resend code in ${resendSeconds}s`
+                        : "Resend authentication code"}
+                    </button>
+                  ) : null}
                 </div>
 
 

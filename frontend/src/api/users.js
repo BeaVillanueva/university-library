@@ -19,3 +19,7 @@ export async function apiDeleteUser(id) {
   const res = await http.delete(`/users/${id}`);
   return res.data;
 }
+
+export async function apiArchiveUser(id) {
+  return apiDeleteUser(id);
+}

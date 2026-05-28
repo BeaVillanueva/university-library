@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { apiResetPassword } from "../api/auth";
+import { apiForgotPassword, apiResetPassword } from "../api/auth";
 import { useUi } from "../state/UiContext";
 import { FiEye, FiEyeOff, FiKey, FiMail } from "react-icons/fi";
 
@@ -61,7 +61,10 @@ export default function ResetPasswordPage() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // ✅ modal states
   const [successOpen, setSuccessOpen] = useState(false);
@@ -75,6 +78,14 @@ export default function ResetPasswordPage() {
       }));
     }
   }, [initialEmail, initialToken]);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = setInterval(() => {
+      setResendSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
 
   function validate() {
     if (!form.email.trim()) return "Email is required.";
@@ -111,6 +122,28 @@ export default function ResetPasswordPage() {
       setError(e2?.response?.data?.error || e2?.message || "Reset failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function resendCode() {
+    setError("");
+    setNotice("");
+    const email = form.email.trim();
+    if (!email) {
+      setError("Email is required before resending a code.");
+      return;
+    }
+
+    setResending(true);
+    try {
+      await apiForgotPassword(email);
+      setForm((prev) => ({ ...prev, token: "" }));
+      setResendSeconds(30);
+      setNotice("A new reset code was sent. Old reset codes are now invalid.");
+    } catch (e2) {
+      setError(e2?.response?.data?.error || e2?.message || "Resend failed");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -172,6 +205,48 @@ export default function ResetPasswordPage() {
                       disabled={emailLocked}
                       readOnly={emailLocked}
                     />
+                  </div>
+                </div>
+
+                {/* Reset code */}
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium text-white/90" htmlFor="token">
+                      Reset code
+                    </label>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-white hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={resendCode}
+                      disabled={resending || loading || resendSeconds > 0}
+                    >
+                      {resending
+                        ? "Sending..."
+                        : resendSeconds > 0
+                          ? `Resend code in ${resendSeconds}s`
+                          : "Resend code"}
+                    </button>
+                  </div>
+                  <div className="relative mt-1">
+                    <FiKey
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="token"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.token}
+                      onChange={(e) =>
+                        setForm({ ...form, token: e.target.value.replace(/\D/g, "").slice(0, 6) })
+                      }
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      placeholder="000000"
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-white/70">
+                    Enter the 6-digit code from your email. It expires in 15 minutes.
                   </div>
                 </div>
 
@@ -260,6 +335,11 @@ export default function ResetPasswordPage() {
                 {error ? (
                   <div className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white">
                     {error}
+                  </div>
+                ) : null}
+                {notice ? (
+                  <div className="rounded-lg border border-emerald-200/30 bg-emerald-500/15 px-3 py-2 text-sm text-white">
+                    {notice}
                   </div>
                 ) : null}
 

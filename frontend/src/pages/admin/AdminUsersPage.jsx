@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   apiCreateUser,
-  apiDeleteUser,
+  apiArchiveUser,
   apiListUsers,
   apiUpdateUser
 } from "../../api/users";
@@ -28,17 +28,20 @@ const IMUS_COURSES = [
 ];
 
 const TABS = {
-  all: "All Users",
+  active: "Active",
+  archived: "Archived",
   create: "Create"
 };
 
 function tabFromPath(pathname) {
   if (pathname.startsWith("/app/admin/users/create")) return "create";
-  return "all";
+  if (pathname.startsWith("/app/admin/users/archived")) return "archived";
+  return "active";
 }
 
 function pathFromTab(tab) {
   if (tab === "create") return "/app/admin/users/create";
+  if (tab === "archived") return "/app/admin/users/archived";
   return "/app/admin/users";
 }
 
@@ -66,7 +69,8 @@ export default function AdminUsersPage() {
   const [workingId, setWorkingId] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [restoreTarget, setRestoreTarget] = useState(null);
 
   const isStudentForm = form.role === "student";
   const courseOptions = useMemo(() => IMUS_COURSES, []);
@@ -84,7 +88,12 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await apiListUsers({ page, limit: 10, q: q || undefined });
+      const res = await apiListUsers({
+        page,
+        limit: 10,
+        q: q || undefined,
+        status: tab === "archived" ? "archived" : "active"
+      });
       setItems(res.items || []);
       setTotalPages(res.total_pages || 1);
     } catch (e) {
@@ -95,7 +104,7 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    if (tab === "all") loadUsers();
+    if (tab === "active" || tab === "archived") loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, page, q]);
 
@@ -151,22 +160,41 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function removeUser(id) {
+  async function archiveUser(id) {
     setWorkingId(id);
     setError("");
     setNotice("");
     try {
-      await apiDeleteUser(id);
-      voiceAccessibility.announceSuccess("User deleted successfully.");
-      setNotice("User deleted successfully.");
+      await apiArchiveUser(id);
+      voiceAccessibility.announceSuccess("User archived successfully.");
+      setNotice("User archived successfully.");
       await loadUsers();
     } catch (e) {
-      const errorMsg = e?.response?.data?.error || e?.message || "Delete failed";
+      const errorMsg = e?.response?.data?.error || e?.message || "Archive failed";
       voiceAccessibility.announceError(errorMsg);
       setError(errorMsg);
     } finally {
       setWorkingId(null);
-      setDeleteTarget(null);
+      setArchiveTarget(null);
+    }
+  }
+
+  async function restoreUser(id) {
+    setWorkingId(id);
+    setError("");
+    setNotice("");
+    try {
+      await apiUpdateUser(id, { status: "approved" });
+      voiceAccessibility.announceSuccess("User restored successfully.");
+      setNotice("User restored successfully.");
+      await loadUsers();
+    } catch (e) {
+      const errorMsg = e?.response?.data?.error || e?.message || "Restore failed";
+      voiceAccessibility.announceError(errorMsg);
+      setError(errorMsg);
+    } finally {
+      setWorkingId(null);
+      setRestoreTarget(null);
     }
   }
 
@@ -214,11 +242,13 @@ export default function AdminUsersPage() {
         </div>
       ) : null}
 
-      {tab === "all" ? (
+      {tab === "active" || tab === "archived" ? (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm a11y-surface a11y-outline">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold">All Users</div>
+              <div className="text-sm font-semibold">
+                {tab === "archived" ? "Archived Users" : "Active Users"}
+              </div>
               <div className="text-xs text-slate-500 a11y-muted">
                 Search by name, email, or role.
               </div>
@@ -289,14 +319,25 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-3 py-2 text-xs">{u.status || "-"}</td>
                         <td className="px-3 py-2">
-                          <button
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs hover:bg-slate-50 shadow-sm a11y-surface a11y-outline"
-                            onClick={() => setDeleteTarget(u)}
-                            disabled={workingId === u.id}
-                            type="button"
-                          >
-                            Delete
-                          </button>
+                          {tab === "archived" ? (
+                            <button
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shadow-sm"
+                              onClick={() => setRestoreTarget(u)}
+                              disabled={workingId === u.id}
+                              type="button"
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 shadow-sm"
+                              onClick={() => setArchiveTarget(u)}
+                              disabled={workingId === u.id}
+                              type="button"
+                            >
+                              Archive
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -404,14 +445,24 @@ export default function AdminUsersPage() {
       ) : null}
 
       <ConfirmModal
-        open={Boolean(deleteTarget)}
-        title="Delete user?"
-        message={`Delete ${deleteTarget?.name || "this user"}? This cannot be undone.`}
-        confirmText="Delete"
+        open={Boolean(archiveTarget)}
+        title="Archive user?"
+        message={`Archive ${archiveTarget?.name || "this user"}? They will no longer appear in the active users list and cannot log in while archived.`}
+        confirmText="Archive"
         tone="danger"
-        loading={workingId === deleteTarget?.id}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && removeUser(deleteTarget.id)}
+        loading={workingId === archiveTarget?.id}
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={() => archiveTarget && archiveUser(archiveTarget.id)}
+      />
+      <ConfirmModal
+        open={Boolean(restoreTarget)}
+        title="Restore user?"
+        message={`Restore ${restoreTarget?.name || "this user"} to active status?`}
+        confirmText="Restore"
+        tone="primary"
+        loading={workingId === restoreTarget?.id}
+        onCancel={() => setRestoreTarget(null)}
+        onConfirm={() => restoreTarget && restoreUser(restoreTarget.id)}
       />
     </div>
   );

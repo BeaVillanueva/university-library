@@ -299,13 +299,13 @@ export default function AppLayout() {
         <aside
           className={[
             collapsed ? "w-[90px]" : "w-[300px]",
-            "shrink-0 h-screen sticky top-0",
+            "shrink-0 h-screen max-h-screen sticky top-0 overflow-hidden",
             open ? "block" : "hidden lg:block",
           ].join(" ")}
           aria-label="Sidebar navigation"
         >
           <div
-            className="h-full bg-[#2f4f4c] p-3 text-white shadow-xl flex flex-col rounded-r-[28px] overflow-x-hidden"
+            className="h-full max-h-screen bg-[#2f4f4c] p-3 text-white shadow-xl flex flex-col rounded-r-[28px] overflow-x-hidden"
             onClick={onSidebarBackgroundClick}
             role="presentation"
           >
@@ -337,7 +337,7 @@ export default function AppLayout() {
               </div>
             )}
 
-            <nav className="mt-3 space-y-1 flex-1 overflow-hidden px-1">
+            <nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-1 pr-2">
               <LinkItem
                 to="/app"
                 end
@@ -383,7 +383,14 @@ export default function AppLayout() {
                     <div className="mt-1 space-y-1">
                       <SubLinkItem
                         to="/app/admin/users"
-                        label="All Users"
+                        label="Active Users"
+                        onNavigate={onNavigate}
+                        collapsed={collapsed}
+                        end
+                      />
+                      <SubLinkItem
+                        to="/app/admin/users/archived"
+                        label="Archived Users"
                         onNavigate={onNavigate}
                         collapsed={collapsed}
                         end
@@ -589,7 +596,7 @@ export default function AppLayout() {
       <ConfirmModal
         open={logoutOpen}
         title="Log out?"
-        message="You will be signed out and returned to the landing page."
+        message="You will be signed out and returned to the Home page."
         confirmText="Log out"
         tone="danger"
         loading={logoutLoading}

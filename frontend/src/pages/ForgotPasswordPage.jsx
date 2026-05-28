@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiForgotPassword } from "../api/auth";
 import { useUi } from "../state/UiContext";
@@ -33,6 +33,16 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
 
   const [successOpen, setSuccessOpen] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = setInterval(() => {
+      setResendSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -41,6 +51,8 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     try {
       await apiForgotPassword(email);
+      setCodeSent(true);
+      setResendSeconds(30);
       setSuccessOpen(true);
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Request failed");
@@ -53,12 +65,12 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen w-full">
       {successOpen ? (
         <Modal
-          title="Reset link sent"
-          message="We sent password reset instructions. Please check your Inbox and Spam/Junk."
+          title="Reset code sent"
+          message="We sent a password reset code/link. Please check your Inbox and Spam/Junk. The code expires in 15 minutes."
           confirmText="OK"
           onConfirm={() => {
             setSuccessOpen(false);
-            nav("/login"); // ✅ go back to login after OK
+            nav(`/reset-password?email=${encodeURIComponent(email.trim())}`);
           }}
         />
       ) : null}
@@ -112,9 +124,15 @@ export default function ForgotPasswordPage() {
 
                 <button
                   className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-2 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
-                  disabled={loading}
+                  disabled={loading || (codeSent && resendSeconds > 0)}
                 >
-                  {loading ? "Submitting…" : "Send reset link"}
+                  {loading
+                    ? "Submitting..."
+                    : codeSent && resendSeconds > 0
+                      ? `Resend code in ${resendSeconds}s`
+                      : codeSent
+                        ? "Resend reset code"
+                        : "Send reset code"}
                 </button>
 
                 <div className="text-sm text-white/90">
