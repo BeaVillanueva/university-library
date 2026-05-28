@@ -26,6 +26,7 @@
 /* ✅ Controlled by Accessibility Settings (default stays 18px) */
 html {
   font-size: var(--app-font-size, 18px);
+  scroll-behavior: smooth;
 }
 
 /* Visible focus states (keyboard navigation) */
@@ -37,6 +38,38 @@ html {
 /* Table horizontal scroll helper */
 .table-scroll {
   overflow-x: auto;
+}
+
+/* Modern sidebar scrollbar */
+.app-sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 164, 54, 0.82) rgba(255, 255, 255, 0.08);
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  margin: 8px 0;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d6a436, #b8861f);
+  border: 2px solid #2f4f4c;
+  border-radius: 999px;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #f0c154, #d6a436);
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* =========================================================

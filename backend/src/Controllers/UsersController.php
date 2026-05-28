@@ -322,7 +322,7 @@ final class UsersController {
     }
   }
 
- public static function delete(PDO $pdo, array $auth, int $id): void {
+  public static function delete(PDO $pdo, array $auth, int $id): void {
     $actorId = (int)($auth['user_id'] ?? 0) ?: null;
 
     $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, student_number, status FROM users WHERE id = ? LIMIT 1");
@@ -391,5 +391,129 @@ final class UsersController {
     ]);
 
     Http::ok(['message' => 'User archived.']);
+  }
+
+  public static function permanentlyDelete(PDO $pdo, array $auth, int $id): void {
+    $actorId = (int)($auth['user_id'] ?? 0) ?: null;
+
+    if ($actorId !== null && $actorId === $id) {
+      Http::error('You cannot permanently delete your own account.', 409);
+    }
+
+    $stmtOld = $pdo->prepare("SELECT id, name, email, role, department, student_number, status FROM users WHERE id = ? LIMIT 1");
+    $stmtOld->execute([$id]);
+    $old = $stmtOld->fetch();
+
+    if (!$old) {
+      Http::error('User not found', 404);
+    }
+
+    if ((string)$old['status'] !== 'archived') {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'users.permanent_delete_failed',
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'details' => [
+          'reason' => 'not_archived',
+          'target_user_id' => $id,
+          'target_email' => (string)$old['email'],
+          'target_status' => (string)$old['status'],
+        ],
+      ]);
+
+      Http::error('Only archived users can be permanently deleted.', 409);
+    }
+
+    $stmtBorrow = $pdo->prepare("
+      SELECT COUNT(*) AS c FROM borrow_records
+      WHERE user_id = ?
+        AND return_date IS NULL
+        AND status IN ('pending', 'borrowed', 'overdue')
+    ");
+    $stmtBorrow->execute([$id]);
+    $activeBorrows = (int)($stmtBorrow->fetch()['c'] ?? 0);
+
+    if ($activeBorrows > 0) {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'users.permanent_delete_failed',
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'details' => [
+          'reason' => 'has_active_borrow_records',
+          'active_borrow_count' => $activeBorrows,
+          'target_user_id' => $id,
+          'target_email' => (string)$old['email'],
+        ],
+      ]);
+
+      Http::error(
+        "Cannot permanently delete user with active borrow records ({$activeBorrows}). Please resolve all pending, borrowed, or overdue books first.",
+        409,
+        ['active_borrow_count' => $activeBorrows]
+      );
+    }
+
+    try {
+      $pdo->beginTransaction();
+
+      $pdo->prepare("DELETE FROM user_preferences WHERE user_id = ?")->execute([$id]);
+      $pdo->prepare("DELETE FROM due_date_reminders WHERE user_id = ?")->execute([$id]);
+      $pdo->prepare("DELETE FROM password_resets WHERE email = ?")->execute([(string)$old['email']]);
+      $pdo->prepare("DELETE FROM login_attempts WHERE email = ?")->execute([(string)$old['email']]);
+
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'users.permanent_delete',
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'details' => [
+          'target_user_id' => $id,
+          'target_name' => (string)$old['name'],
+          'target_email' => (string)$old['email'],
+          'target_role' => (string)$old['role'],
+          'target_department' => $old['department'] ?? null,
+          'target_student_number' => $old['student_number'] ?? null,
+          'target_status' => (string)$old['status'],
+          'deleted_related' => [
+            'user_preferences' => true,
+            'due_date_reminders' => true,
+            'password_resets' => true,
+            'login_attempts' => true,
+            'borrow_records' => 'database_cascade',
+          ],
+        ],
+      ]);
+
+      $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND status = 'archived'");
+      $stmt->execute([$id]);
+
+      if ($stmt->rowCount() < 1) {
+        throw new RuntimeException('No archived user was deleted.');
+      }
+
+      $pdo->commit();
+      Http::ok(['message' => 'User permanently deleted.']);
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+      }
+
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'users.permanent_delete_failed',
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'details' => [
+          'reason' => 'delete_error',
+          'target_user_id' => $id,
+          'target_email' => (string)$old['email'],
+          'error' => $e->getMessage(),
+        ],
+      ]);
+
+      Http::error('Failed to permanently delete user.', 500);
+    }
   }
 }

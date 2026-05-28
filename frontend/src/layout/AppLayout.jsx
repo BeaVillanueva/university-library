@@ -337,7 +337,7 @@ export default function AppLayout() {
               </div>
             )}
 
-            <nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-1 pr-2">
+            <nav className="app-sidebar-scrollbar mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-1 pr-2">
               <LinkItem
                 to="/app"
                 end

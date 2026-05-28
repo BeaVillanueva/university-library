@@ -4,6 +4,7 @@ import {
   apiCreateUser,
   apiArchiveUser,
   apiListUsers,
+  apiPermanentDeleteUser,
   apiUpdateUser
 } from "../../api/users";
 import Alert from "../../components/Alert";
@@ -71,6 +72,7 @@ export default function AdminUsersPage() {
   const [notice, setNotice] = useState("");
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [restoreTarget, setRestoreTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const isStudentForm = form.role === "student";
   const courseOptions = useMemo(() => IMUS_COURSES, []);
@@ -198,6 +200,26 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function permanentlyDeleteUser(id) {
+    setWorkingId(id);
+    setError("");
+    setNotice("");
+    try {
+      await apiPermanentDeleteUser(id);
+      voiceAccessibility.announceSuccess("User permanently deleted.");
+      setNotice("User permanently deleted.");
+      await loadUsers();
+    } catch (e) {
+      const errorMsg =
+        e?.response?.data?.error || e?.message || "Permanent delete failed";
+      voiceAccessibility.announceError(errorMsg);
+      setError(errorMsg);
+    } finally {
+      setWorkingId(null);
+      setDeleteTarget(null);
+    }
+  }
+
   return (
     <div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -320,14 +342,24 @@ export default function AdminUsersPage() {
                         <td className="px-3 py-2 text-xs">{u.status || "-"}</td>
                         <td className="px-3 py-2">
                           {tab === "archived" ? (
-                            <button
-                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 shadow-sm"
-                              onClick={() => setRestoreTarget(u)}
-                              disabled={workingId === u.id}
-                              type="button"
-                            >
-                              Restore
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-60"
+                                onClick={() => setRestoreTarget(u)}
+                                disabled={workingId === u.id}
+                                type="button"
+                              >
+                                Restore
+                              </button>
+                              <button
+                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-60"
+                                onClick={() => setDeleteTarget(u)}
+                                disabled={workingId === u.id}
+                                type="button"
+                              >
+                                Delete Permanently
+                              </button>
+                            </div>
                           ) : (
                             <button
                               className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 shadow-sm"
@@ -463,6 +495,16 @@ export default function AdminUsersPage() {
         loading={workingId === restoreTarget?.id}
         onCancel={() => setRestoreTarget(null)}
         onConfirm={() => restoreTarget && restoreUser(restoreTarget.id)}
+      />
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete permanently?"
+        message={`This action cannot be undone. Permanently delete ${deleteTarget?.name || "this user"}?`}
+        confirmText="Delete Permanently"
+        tone="danger"
+        loading={workingId === deleteTarget?.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && permanentlyDeleteUser(deleteTarget.id)}
       />
     </div>
   );

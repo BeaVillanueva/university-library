@@ -23,3 +23,8 @@ export async function apiDeleteUser(id) {
 export async function apiArchiveUser(id) {
   return apiDeleteUser(id);
 }
+
+export async function apiPermanentDeleteUser(id) {
+  const res = await http.delete(`/users/${id}/permanent`);
+  return res.data;
+}

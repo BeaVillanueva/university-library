@@ -369,6 +369,14 @@ if (in_array($method, ['PUT','PATCH'], true)) {
  * Dynamic Routes - DELETE
  */
 if ($method === 'DELETE') {
+  $permanentUserId = Path::matchSuffixId($path, '/users/', '/permanent');
+  if ($permanentUserId !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin']);
+    UsersController::permanentlyDelete(pdo($config), $auth, $permanentUserId);
+    exit;
+  }
+
   $id = Path::matchId($path, '/users/');
   if ($id !== null) {
     $auth = AuthMiddleware::requireAuth($config);
