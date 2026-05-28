@@ -9,6 +9,7 @@ import ConfirmModal from "../../components/ConfirmModal.jsx";
 import MessageModal from "../../components/MessageModal.jsx";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
+import { formatDate } from "../../utils/dateTime.js";
 
 function fmt(s) {
   if (!s) return "—";
@@ -383,8 +384,8 @@ export default function BorrowPendingPage() {
                       <div className="text-xs text-slate-500">{fmt(r.isbn)}</div>
                     </td>
 
-                    <td className="px-4 py-4">{fmt(r.borrow_date)}</td>
-                    <td className="px-4 py-4">{fmt(r.due_date)}</td>
+                    <td className="px-4 py-4">{formatDate(r.borrow_date, "—")}</td>
+                    <td className="px-4 py-4">{formatDate(r.due_date, "—")}</td>
 
                     <td className="px-4 py-4">
                       <div className="flex gap-2">

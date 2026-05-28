@@ -18,6 +18,9 @@ final class Database {
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+
+    $timezone = (string)($config['timezone'] ?? '+08:00');
+    $this->pdo->exec("SET time_zone = " . $this->pdo->quote($timezone));
   }
 
   public function pdo(): PDO {

@@ -456,9 +456,23 @@ final class UsersController {
     }
 
     try {
+      $pdo->exec("
+        CREATE TABLE IF NOT EXISTS announcement_reads (
+          id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          announcement_id INT NOT NULL,
+          user_id INT UNSIGNED NOT NULL,
+          read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uniq_announcement_reads_user (announcement_id, user_id),
+          KEY idx_announcement_reads_user (user_id),
+          KEY idx_announcement_reads_announcement (announcement_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      ");
+
       $pdo->beginTransaction();
 
       $pdo->prepare("DELETE FROM user_preferences WHERE user_id = ?")->execute([$id]);
+      $pdo->prepare("DELETE FROM announcement_reads WHERE user_id = ?")->execute([$id]);
       $pdo->prepare("DELETE FROM due_date_reminders WHERE user_id = ?")->execute([$id]);
       $pdo->prepare("DELETE FROM password_resets WHERE email = ?")->execute([(string)$old['email']]);
       $pdo->prepare("DELETE FROM login_attempts WHERE email = ?")->execute([(string)$old['email']]);
@@ -478,6 +492,7 @@ final class UsersController {
           'target_status' => (string)$old['status'],
           'deleted_related' => [
             'user_preferences' => true,
+            'announcement_reads' => true,
             'due_date_reminders' => true,
             'password_resets' => true,
             'login_attempts' => true,

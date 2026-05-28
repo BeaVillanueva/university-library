@@ -28,11 +28,11 @@ const IMUS_COURSES = [
   "Teacher Certificate Program"
 ];
 
-const TABS = {
-  active: "Active",
-  archived: "Archived",
-  create: "Create"
-};
+const TABS = [
+  ["active", "Active Users"],
+  ["archived", "Archived Users"],
+  ["create", "Create User"]
+];
 
 function tabFromPath(pathname) {
   if (pathname.startsWith("/app/admin/users/create")) return "create";
@@ -231,7 +231,7 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex gap-2">
-          {Object.entries(TABS).map(([key, label]) => (
+          {TABS.map(([key, label]) => (
             <button
               key={key}
               type="button"

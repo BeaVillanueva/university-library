@@ -539,6 +539,19 @@ CREATE TABLE `announcements` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `announcement_reads`
+--
+
+CREATE TABLE `announcement_reads` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `announcement_id` int(11) NOT NULL,
+  `user_id` int(10) UNSIGNED NOT NULL,
+  `read_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 -- Dumping data for table `announcements`
 --
@@ -744,7 +757,7 @@ CREATE TABLE `user_preferences` (
   `id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `language` varchar(10) DEFAULT 'en',
-  `theme_mode` varchar(10) DEFAULT 'light',
+  `theme_mode` varchar(10) DEFAULT 'system',
   `font_size` varchar(10) DEFAULT 'normal',
   `text_to_speech_enabled` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -772,6 +785,15 @@ ALTER TABLE `announcements`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `announcement_reads`
+--
+ALTER TABLE `announcement_reads`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_announcement_reads_user` (`announcement_id`,`user_id`),
+  ADD KEY `idx_announcement_reads_user` (`user_id`),
+  ADD KEY `idx_announcement_reads_announcement` (`announcement_id`);
 
 --
 -- Indexes for table `books`
@@ -866,6 +888,12 @@ ALTER TABLE `activity_logs`
 --
 ALTER TABLE `announcements`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `announcement_reads`
+--
+ALTER TABLE `announcement_reads`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `books`

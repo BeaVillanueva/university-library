@@ -4,6 +4,7 @@ import { voiceAccessibility } from "../utils/voiceAccessibility";
 import { apiListActivityLogs } from "../api/activityLogs";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
+import { formatDateTime } from "../utils/dateTime";
 
 function formatAction(action) {
   const map = {
@@ -261,7 +262,7 @@ export default function ActivityLogsPage() {
               ) : (
                 rows.map((l) => (
                   <tr key={l.id} className="border-t border-slate-100 align-top">
-                    <td className="px-4 py-3 whitespace-nowrap">{l.created_at}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(l.created_at, "—")}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{l.actor_name || "—"}</div>
                       <div className="text-xs text-slate-500 a11y-muted">{l.actor_email || ""}</div>

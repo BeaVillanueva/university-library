@@ -3,6 +3,7 @@ import { announcePageLoad, announceLoading } from "../hooks/useVoiceGuide";
 import { apiMyBorrowHistory } from "../api/borrow";
 import Pagination from "../components/Pagination";
 import Alert from "../components/Alert";
+import { daysUntil, formatDate } from "../utils/dateTime";
 
 export default function MyBorrowsPage() {
   const [items, setItems] = useState([]);
@@ -141,9 +142,7 @@ function BorrowCard({ record, isActive, apiBase }) {
           ? "bg-amber-50 text-amber-700 border-amber-200"
           : "bg-green-50 text-green-700 border-green-200";
 
-  const daysLeft = record.due_date
-    ? Math.ceil((new Date(record.due_date) - new Date()) / (1000 * 60 * 60 * 24))
-    : null;
+  const daysLeft = daysUntil(record.due_date);
 
   const isOverdue = daysLeft !== null && daysLeft < 0;
 
@@ -200,7 +199,7 @@ function BorrowCard({ record, isActive, apiBase }) {
           {record.borrow_date && (
             <div className="flex justify-between">
               <span className="text-slate-500">Borrowed:</span>
-              <span className="font-mono">{record.borrow_date}</span>
+              <span className="font-mono">{formatDate(record.borrow_date)}</span>
             </div>
           )}
 
@@ -208,7 +207,7 @@ function BorrowCard({ record, isActive, apiBase }) {
             <div className={`flex justify-between ${isOverdue ? "text-red-600" : ""}`}>
               <span className="text-slate-500">Due:</span>
               <span className={`font-mono ${isOverdue ? "font-semibold" : ""}`}>
-                {record.due_date}
+                {formatDate(record.due_date)}
                 {isOverdue && daysLeft !== null && ` (${Math.abs(daysLeft)}d overdue)`}
               </span>
             </div>
@@ -217,7 +216,7 @@ function BorrowCard({ record, isActive, apiBase }) {
           {record.return_date && (
             <div className="flex justify-between">
               <span className="text-slate-500">Returned:</span>
-              <span className="font-mono">{record.return_date}</span>
+              <span className="font-mono">{formatDate(record.return_date)}</span>
             </div>
           )}
         </div>

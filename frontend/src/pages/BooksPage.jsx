@@ -13,6 +13,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import MessageModal from "../components/MessageModal";
 import PromptModal from "../components/PromptModal";
 import TextToSpeechButton from "../components/TextToSpeechButton";
+import { daysUntil, formatDate } from "../utils/dateTime";
 import { FiBookOpen, FiCalendar, FiAlertCircle, FiX } from "react-icons/fi";
 
 export default function BooksPage() {
@@ -341,11 +342,7 @@ export default function BooksPage() {
   }
 
   function getDaysLeft(dueDate) {
-    if (!dueDate) return null;
-    const due = new Date(dueDate);
-    const now = new Date();
-    const diff = due - now;
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return daysUntil(dueDate);
   }
 
   // ✅ Filter list on the frontend for new availability categories
@@ -459,7 +456,7 @@ export default function BooksPage() {
                           {record.borrow_date && (
                             <div className="flex items-center gap-2">
                               <FiCalendar className="text-slate-400 flex-shrink-0" />
-                              <span>Borrowed: <span className="font-mono text-slate-900">{record.borrow_date}</span></span>
+                              <span>Borrowed: <span className="font-mono text-slate-900">{formatDate(record.borrow_date)}</span></span>
                             </div>
                           )}
                           
@@ -467,7 +464,7 @@ export default function BooksPage() {
                             <div className={`flex items-center gap-2 ${isOverdue ? "text-red-600" : ""}`}>
                               <FiCalendar className={`flex-shrink-0 ${isOverdue ? "text-red-600" : "text-slate-400"}`} />
                               <span className={isOverdue ? "font-semibold" : ""}>
-                                Due: <span className="font-mono">{record.due_date}</span>
+                                Due: <span className="font-mono">{formatDate(record.due_date)}</span>
                               </span>
                               {daysLeft !== null && (
                                 <span className={`ml-auto font-bold ${isOverdue ? "text-red-600" : daysLeft <= 3 ? "text-amber-600" : "text-green-600"}`}>

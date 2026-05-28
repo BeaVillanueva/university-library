@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { apiListAllBorrows, apiReturnBorrow } from "../../api/borrow";
 import Pagination from "../../components/Pagination";
 import Alert from "../../components/Alert";
+import { formatDate } from "../../utils/dateTime";
 
 export default function BorrowReturnPage() {
   const [items, setItems] = useState([]);
@@ -176,9 +177,9 @@ export default function BorrowReturnPage() {
                       <div className="font-medium">{r.title}</div>
                       <div className="text-xs text-slate-500 a11y-muted font-mono">{r.isbn}</div>
                     </td>
-                    <td className="px-4 py-3">{r.borrow_date}</td>
-                    <td className="px-4 py-3">{r.due_date}</td>
-                    <td className="px-4 py-3">{r.return_date || "—"}</td>
+                    <td className="px-4 py-3">{formatDate(r.borrow_date, "—")}</td>
+                    <td className="px-4 py-3">{formatDate(r.due_date, "—")}</td>
+                    <td className="px-4 py-3">{formatDate(r.return_date, "—")}</td>
                     <td className="px-4 py-3">
                       <StatusPill status={r.status} />
                     </td>

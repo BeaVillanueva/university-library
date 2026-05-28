@@ -240,21 +240,8 @@ export default function AppLayout() {
       try {
         const res = await apiListAnnouncements();
 
-        const items = Array.isArray(res?.announcements)
-          ? res.announcements
-          : [];
-
-        const activeItems = items.filter((a) => a.status === "active");
-
-        const lastSeen = localStorage.getItem("last_seen_announcements");
-
-        const newItems = activeItems.filter((a) => {
-          const date = a.updated_at || a.created_at;
-          return !lastSeen || new Date(date) > new Date(lastSeen);
-        });
-
         if (!cancelled) {
-          setAnnouncementCount(newItems.length);
+          setAnnouncementCount(Number(res?.unread_count || 0));
         }
       } catch {
         if (!cancelled) setAnnouncementCount(0);
@@ -262,10 +249,12 @@ export default function AppLayout() {
     }
 
     loadAnnouncementCount();
+    window.addEventListener("announcements:read", loadAnnouncementCount);
     const t = setInterval(loadAnnouncementCount, 30000);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("announcements:read", loadAnnouncementCount);
       clearInterval(t);
     };
   }, [isStudent]);
@@ -507,17 +496,7 @@ export default function AppLayout() {
                 to="/app/announcements"
                 label="Announcements"
                 icon={FiBell}
-                onNavigate={() => {
-                  if (isStudent) {
-                    localStorage.setItem(
-                      "last_seen_announcements",
-                      new Date().toISOString()
-                    );
-                    setAnnouncementCount(0);
-                  }
-
-                  onNavigate();
-                }}
+                onNavigate={onNavigate}
                 collapsed={collapsed}
                 badge={isStudent ? announcementCount : null}
               />

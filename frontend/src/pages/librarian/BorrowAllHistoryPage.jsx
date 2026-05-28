@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import Pagination from "../../components/Pagination.jsx";
 import { apiListAllBorrows } from "../../api/borrow.js";
+import { formatDate, formatTime } from "../../utils/dateTime.js";
 
 function fmt(s) {
   if (!s) return "—";
@@ -171,7 +172,7 @@ export default function BorrowAllHistoryPage() {
                   const status = String(r.status || "").toLowerCase();
                   // ✅ We can show return time using updated_at when status is returned
                   const returnTime =
-                    status === "returned" && r.updated_at ? fmtTimeFromTimestamp(r.updated_at) : "—";
+                    status === "returned" && r.updated_at ? formatTime(r.updated_at, "—") : "—";
 
                   return (
                     <tr key={r.id} className="bg-white">
@@ -194,19 +195,19 @@ export default function BorrowAllHistoryPage() {
                       {/* Borrow time not available (DATE only) */}
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
-                          <span>{fmt(r.borrow_date)}</span>
+                          <span>{formatDate(r.borrow_date, "—")}</span>
                           <span className="text-xs text-slate-500 a11y-muted">
-                            {r.created_at ? fmtTimeFromTimestamp(r.created_at) : "—"}
+                            {r.created_at ? formatTime(r.created_at, "—") : "—"}
                           </span>
                         </div>
                       </td>
 
-                      <td className="px-4 py-4">{fmt(r.due_date)}</td>
+                      <td className="px-4 py-4">{formatDate(r.due_date, "—")}</td>
 
                       {/* Return date + time (best possible using updated_at) */}
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
-                          <span>{fmt(r.return_date)}</span>
+                          <span>{formatDate(r.return_date, "—")}</span>
                           <span className="text-xs text-slate-500 a11y-muted">{returnTime}</span>
                         </div>
                       </td>

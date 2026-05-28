@@ -4,6 +4,7 @@ import { useAuth } from "../../state/AuthContext";
 import Alert from "../../components/Alert";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
+import { formatDate } from "../../utils/dateTime";
 
 export default function AdminReportsPage() {
   // ✅ Announce page load
@@ -174,9 +175,9 @@ export default function AdminReportsPage() {
                       <div className="font-medium">{r.book_title}</div>
                       <div className="text-xs text-slate-500 a11y-muted font-mono">{r.isbn}</div>
                     </td>
-                    <td className="px-4 py-3">{r.borrow_date}</td>
-                    <td className="px-4 py-3">{r.due_date}</td>
-                    <td className="px-4 py-3">{r.return_date || "—"}</td>
+                    <td className="px-4 py-3">{formatDate(r.borrow_date, "—")}</td>
+                    <td className="px-4 py-3">{formatDate(r.due_date, "—")}</td>
+                    <td className="px-4 py-3">{formatDate(r.return_date, "—")}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
                         {r.status}

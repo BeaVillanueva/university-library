@@ -5,6 +5,7 @@ import Pagination from "../../components/Pagination.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
 import MessageModal from "../../components/MessageModal.jsx";
 import { apiListAllBorrows, apiReturnBorrow } from "../../api/borrow.js";
+import { formatDate, formatTime } from "../../utils/dateTime.js";
 
 function fmt(s) {
   if (!s) return "—";
@@ -346,18 +347,18 @@ export default function BorrowBorrowedPage() {
                       <div className="text-xs text-slate-500">{fmt(r.isbn)}</div>
                     </td>
 
-                    <td className="px-4 py-4">{fmt(r.borrow_date)}</td>
+                    <td className="px-4 py-4">{formatDate(r.borrow_date, "—")}</td>
 
                     {/* ✅ NEW: Borrow time from created_at (needs DB column created_at) */}
                     <td className="px-4 py-4">
                       <div className="text-slate-800">
-                        {r.created_at ? fmtTimeFromTimestamp(r.created_at) : "—"}
+                        {r.created_at ? formatTime(r.created_at, "—") : "—"}
                       </div>
                     </td>
 
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <span>{fmt(r.due_date)}</span>
+                        <span>{formatDate(r.due_date, "—")}</span>
                         {String(r.status || "").toLowerCase() === "overdue" ? (
                           <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
                             OVERDUE

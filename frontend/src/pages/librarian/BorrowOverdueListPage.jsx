@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import Pagination from "../../components/Pagination.jsx";
 import { apiListAllBorrows } from "../../api/borrow.js";
+import { formatDate } from "../../utils/dateTime.js";
 
 function fmt(s) {
   if (!s) return "—";
@@ -181,8 +182,8 @@ export default function BorrowOverdueListPage() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-4">{fmt(r.borrow_date)}</td>
-                    <td className="px-4 py-4">{fmt(r.due_date)}</td>
+                    <td className="px-4 py-4">{formatDate(r.borrow_date, "—")}</td>
+                    <td className="px-4 py-4">{formatDate(r.due_date, "—")}</td>
 
                     <td className="px-4 py-4">
                       <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">

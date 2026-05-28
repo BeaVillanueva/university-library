@@ -24,6 +24,11 @@ export async function deleteAnnouncement(id) {
   return data;
 }
 
+export async function markAnnouncementsRead() {
+  const { data } = await http.post("/announcements/mark-read", {});
+  return data;
+}
+
 // ======================
 // Compatible sa AnnouncementPanel.jsx
 // ======================
@@ -52,3 +57,4 @@ export async function apiUpdateAnnouncement(id, title, message, status) {
 
 // DELETE
 export const apiDeleteAnnouncement = deleteAnnouncement;
+export const apiMarkAnnouncementsRead = markAnnouncementsRead;

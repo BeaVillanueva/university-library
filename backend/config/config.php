@@ -5,6 +5,7 @@ return [
   'app' => [
     'env' => getenv('APP_ENV') ?: 'local',
     'base_url' => getenv('APP_URL') ?: 'http://localhost/university-library/backend/public/index.php',
+    'timezone' => getenv('APP_TIMEZONE') ?: 'Asia/Manila',
   ],
 
   'frontend' => [
@@ -18,6 +19,7 @@ return [
     'user' => getenv('DB_USERNAME') ?: 'root',
     'pass' => getenv('DB_PASSWORD') ?: '',
     'charset' => 'utf8mb4',
+    'timezone' => getenv('DB_TIMEZONE') ?: '+08:00',
   ],
 
   'jwt' => [

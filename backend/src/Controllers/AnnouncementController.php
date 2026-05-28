@@ -2,33 +2,99 @@
 // backend/src/Controllers/AnnouncementController.php
 
 final class AnnouncementController {
+  private static function ensureReadTable(PDO $pdo): void {
+    $pdo->exec("
+      CREATE TABLE IF NOT EXISTS announcement_reads (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        announcement_id INT NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_announcement_reads_user (announcement_id, user_id),
+        KEY idx_announcement_reads_user (user_id),
+        KEY idx_announcement_reads_announcement (announcement_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+  }
 
   /**
    * List all announcements (students see only active, admin/librarian see all)
    */
   public static function list(PDO $pdo, array $auth): void {
+    self::ensureReadTable($pdo);
+
     $role = $auth['role'] ?? '';
+    $userId = (int)($auth['user_id'] ?? 0);
     $isAdmin = in_array($role, ['admin', 'librarian'], true);
 
     $whereSql = $isAdmin ? '' : "WHERE status = 'active'";
     
     $stmt = $pdo->prepare("
-      SELECT id, title, message, posted_by, status, created_at,
-             (SELECT name FROM users WHERE id = announcements.posted_by) AS posted_by_name
+      SELECT
+        announcements.id,
+        announcements.title,
+        announcements.message,
+        announcements.posted_by,
+        announcements.status,
+        announcements.created_at,
+        announcements.updated_at,
+        (SELECT name FROM users WHERE id = announcements.posted_by) AS posted_by_name,
+        ar.read_at
       FROM announcements
+      LEFT JOIN announcement_reads ar
+        ON ar.announcement_id = announcements.id
+       AND ar.user_id = ?
       $whereSql
-      ORDER BY created_at DESC
+      ORDER BY announcements.created_at DESC
     ");
-    $stmt->execute();
+    $stmt->execute([$userId]);
     $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    Http::ok(['announcements' => $announcements]);
+    $unreadCount = 0;
+    if ($role === 'student') {
+      $countStmt = $pdo->prepare("
+        SELECT COUNT(*) AS c
+        FROM announcements a
+        LEFT JOIN announcement_reads ar
+          ON ar.announcement_id = a.id
+         AND ar.user_id = ?
+        WHERE a.status = 'active'
+          AND ar.id IS NULL
+          AND a.posted_by <> ?
+      ");
+      $countStmt->execute([$userId, $userId]);
+      $unreadCount = (int)($countStmt->fetch()['c'] ?? 0);
+    }
+
+    Http::ok([
+      'announcements' => $announcements,
+      'unread_count' => $unreadCount,
+    ]);
+  }
+
+  public static function markRead(PDO $pdo, array $auth): void {
+    self::ensureReadTable($pdo);
+    AuthMiddleware::requireRole($auth, ['student']);
+
+    $userId = (int)($auth['user_id'] ?? 0);
+
+    $stmt = $pdo->prepare("
+      INSERT IGNORE INTO announcement_reads (announcement_id, user_id)
+      SELECT id, ?
+      FROM announcements
+      WHERE status = 'active'
+        AND posted_by <> ?
+    ");
+    $stmt->execute([$userId, $userId]);
+
+    Http::ok(['message' => 'Announcements marked as read.']);
   }
 
   /**
    * Create announcement (Admin/Librarian only)
    */
   public static function create(PDO $pdo, array $auth): void {
+    self::ensureReadTable($pdo);
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
 
     $data = Http::readJsonBody();
@@ -91,7 +157,10 @@ final class AnnouncementController {
    * Delete announcement
    */
   public static function delete(PDO $pdo, array $auth, int $id): void {
+    self::ensureReadTable($pdo);
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
+
+    $pdo->prepare("DELETE FROM announcement_reads WHERE announcement_id = ?")->execute([$id]);
 
     $stmt = $pdo->prepare("DELETE FROM announcements WHERE id = ?");
     $stmt->execute([$id]);

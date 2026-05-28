@@ -5,11 +5,13 @@ import {
   apiCreateAnnouncement,
   apiUpdateAnnouncement,
   apiDeleteAnnouncement,
+  apiMarkAnnouncementsRead,
 } from "../api/announcements";
 import { useAuth } from "../state/AuthContext";
 import Alert from "./Alert";
 import ConfirmModal from "./ConfirmModal";
 import { announcePageLoad } from "../hooks/useVoiceGuide";
+import { formatDate } from "../utils/dateTime";
 
 export default function AnnouncementPanel() {
   const { user } = useAuth();
@@ -43,6 +45,11 @@ export default function AnnouncementPanel() {
     try {
       const res = await apiListAnnouncements();
       setAnnouncements(res?.announcements || []);
+
+      if (user?.role === "student" && Number(res?.unread_count || 0) > 0) {
+        await apiMarkAnnouncementsRead();
+        window.dispatchEvent(new Event("announcements:read"));
+      }
     } catch (err) {
       setError(err?.response?.data?.error || "Failed to load announcements");
     } finally {
@@ -238,7 +245,7 @@ export default function AnnouncementPanel() {
                     Posted by: {ann.posted_by_name || "Library Staff"}
                   </div>
                   <div className="mt-1">
-                    {new Date(ann.created_at).toLocaleDateString()}
+                    {formatDate(ann.created_at)}
                   </div>
                 </div>
 

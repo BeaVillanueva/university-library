@@ -3,6 +3,7 @@ import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { apiListAllBorrows } from "../../api/borrow";
 import Pagination from "../../components/Pagination";
 import Alert from "../../components/Alert";
+import { daysLate as getDaysLate, formatDate } from "../../utils/dateTime";
 
 export default function OverduePage() {
     useVoiceAnnouncements('LIBRARIAN_OVERDUE');
@@ -84,11 +85,11 @@ export default function OverduePage() {
                       <div className="font-medium">{r.title}</div>
                       <div className="text-xs text-slate-500 a11y-muted font-mono">{r.isbn}</div>
                     </td>
-                    <td className="px-4 py-3">{r.borrow_date}</td>
-                    <td className="px-4 py-3">{r.due_date}</td>
+                    <td className="px-4 py-3">{formatDate(r.borrow_date, "—")}</td>
+                    <td className="px-4 py-3">{formatDate(r.due_date, "—")}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">
-                        {daysLate(r.due_date)} days
+                        {getDaysLate(r.due_date)} days
                       </span>
                     </td>
                   </tr>
@@ -103,12 +104,4 @@ export default function OverduePage() {
       </div>
     </div>
   );
-}
-
-function daysLate(dueDate) {
-  if (!dueDate) return 0;
-  const due = new Date(dueDate + "T00:00:00");
-  const now = new Date();
-  const ms = now.getTime() - due.getTime();
-  return ms > 0 ? Math.floor(ms / (1000 * 60 * 60 * 24)) : 0;
 }

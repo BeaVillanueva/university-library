@@ -19,13 +19,13 @@ final class UserPreferencesController {
       // Create default preferences
       $stmt = $pdo->prepare("
         INSERT INTO user_preferences (user_id, language, theme_mode, font_size)
-        VALUES (?, 'en', 'light', 'normal')
+        VALUES (?, 'en', 'system', 'normal')
       ");
       $stmt->execute([$userId]);
       $prefs = [
         'user_id' => $userId,
         'language' => 'en',
-        'theme_mode' => 'light',
+        'theme_mode' => 'system',
         'font_size' => 'normal',
         'text_to_speech_enabled' => false,
       ];
@@ -42,7 +42,7 @@ final class UserPreferencesController {
     $data = Http::readJsonBody();
 
     $language = trim((string)($data['language'] ?? 'en'));
-    $themeMode = trim((string)($data['theme_mode'] ?? 'light'));
+    $themeMode = trim((string)($data['theme_mode'] ?? 'system'));
     $fontSize = trim((string)($data['font_size'] ?? 'normal'));
     $ttsEnabled = (bool)($data['text_to_speech_enabled'] ?? false);
 
@@ -50,7 +50,7 @@ final class UserPreferencesController {
     if (!in_array($language, ['en', 'tl'], true)) {
       Http::error('Invalid language', 422);
     }
-    if (!in_array($themeMode, ['light', 'dark'], true)) {
+    if (!in_array($themeMode, ['system', 'light', 'dark'], true)) {
       Http::error('Invalid theme mode', 422);
     }
     if (!in_array($fontSize, ['small', 'normal', 'large'], true)) {

@@ -74,6 +74,7 @@ require_once __DIR__ . '/../src/Controllers/UserPreferencesController.php';
 
 
 $config = require __DIR__ . '/../config/config.php';
+date_default_timezone_set($config['app']['timezone'] ?? 'Asia/Manila');
 Cors::handle($config['cors'] ?? []);
 
 try {
@@ -282,6 +283,10 @@ $router->add('GET', '/announcements', function () use ($config) {
 $router->add('POST', '/announcements', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AnnouncementController::create(pdo($config), $auth);
+});
+$router->add('POST', '/announcements/mark-read', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AnnouncementController::markRead(pdo($config), $auth);
 });
 
 /**
