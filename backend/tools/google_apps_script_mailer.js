@@ -1,4 +1,4 @@
-const SCRIPT_SECRET_PROPERTY = "cvsu-library-reset-2026";
+const SCRIPT_SECRET_PROPERTY = "MAIL_SECRET";
 
 function jsonResponse(payload) {
   return ContentService
