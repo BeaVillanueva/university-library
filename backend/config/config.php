@@ -38,7 +38,7 @@ return [
   ],
 
   'library' => [
-    'borrow_days' => 14,
+    'borrow_days' => 1,
     'max_active_borrows_per_student' => 3,
   ],
 
