@@ -65,6 +65,35 @@ final class BorrowController {
       ]);
     }
 
+    // Block students from borrowing if they have ANY overdue book not yet returned.
+    $stmtOverFirst = $pdo->prepare("
+      SELECT COUNT(*) AS c
+      FROM borrow_records
+      WHERE user_id = ?
+        AND status = 'overdue'
+        AND return_date IS NULL
+    ");
+    $stmtOverFirst->execute([$userId]);
+    $overCntFirst = (int)($stmtOverFirst->fetch()['c'] ?? 0);
+
+    if ($overCntFirst > 0) {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $userId,
+        'action' => 'borrow.borrow_failed',
+        'entity_type' => 'borrow',
+        'entity_id' => null,
+        'details' => [
+          'reason' => 'has_overdue',
+          'overdue_count' => $overCntFirst,
+          'book_id' => $bookId,
+        ],
+      ]);
+
+      Http::error('You have an overdue book. Please return it before borrowing another book.', 409, [
+        'overdue_count' => $overCntFirst,
+      ]);
+    }
+
     // Borrow limit (students) - count active borrowed/overdue PLUS pending requests
     $stmt = $pdo->prepare("
       SELECT COUNT(*) AS c
@@ -117,7 +146,7 @@ final class BorrowController {
         ],
       ]);
 
-      Http::error('You have overdue books. Please return them first before borrowing again.', 409, [
+      Http::error('You have an overdue book. Please return it before borrowing another book.', 409, [
         'overdue_count' => $overCnt,
       ]);
     }
@@ -291,6 +320,8 @@ final class BorrowController {
           'book_title' => (string)($rec['book_title'] ?? ''),
         ],
       ]);
+
+      OverdueService::refresh($pdo, $config);
 
       Http::ok(['message' => 'Approved', 'record_id' => $recordId]);
     } catch (Throwable $e) {

@@ -14,6 +14,9 @@ function formatAction(action) {
 
     "borrow.borrow": "Borrowed book",
     "borrow.return": "Returned book",
+    "borrow.overdue": "Marked overdue",
+    "borrow.overdue_email_sent": "Overdue email sent",
+    "borrow.overdue_email_failed": "Overdue email failed",
 
     "import.books_preview": "Previewed book import",
     "import.books_commit": "Imported books",
@@ -66,6 +69,17 @@ function formatDescription(action, details) {
     const book = details.book_title || details.book_id || "a book";
     const who = details.borrower_name || details.borrower_email;
     return `Returned ${book}${who ? ` from ${who}` : ""}`;
+  }
+  if (action === "borrow.overdue") {
+    const book = details.book_title || details.book_id || "a book";
+    const who = details.borrower_name || details.borrower_email;
+    const due = details.due_date ? ` due ${details.due_date}` : "";
+    return `Marked ${book} as overdue${due}${who ? ` for ${who}` : ""}`;
+  }
+  if (action === "borrow.overdue_email_sent" || action === "borrow.overdue_email_failed") {
+    const book = details.book_title || "a book";
+    const email = details.student_email || "student";
+    return `${action.endsWith("_sent") ? "Sent" : "Failed to send"} overdue email to ${email} for ${book}`;
   }
 
   if (action === "users.create" || action === "users.update" || action === "users.delete") {

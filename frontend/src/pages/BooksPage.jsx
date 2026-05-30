@@ -76,7 +76,16 @@ export default function BooksPage() {
     );
   }, [myBorrows]);
 
+  const hasOverdueBook = useMemo(
+    () =>
+      (myBorrows || []).some(
+        (r) => String(r.status || "").toLowerCase() === "overdue"
+      ),
+    [myBorrows]
+  );
+
   const queueFull = canBorrow && myActive.length >= MAX_ACTIVE;
+  const borrowDisabledByAccount = queueFull || hasOverdueBook;
 
   async function refreshBooks() {
     const res = await apiListBooks({
@@ -210,7 +219,9 @@ export default function BooksPage() {
       // ✅ Announce error
       voiceAccessibility.announceError(msg);
       
-      if (msg === "Borrow limit reached") {
+      if (data?.overdue_count || msg.toLowerCase().includes("overdue")) {
+        setError("May overdue book ka pa. Isauli muna ito bago ka ulit makahiram ng panibagong libro.");
+      } else if (msg === "Borrow limit reached") {
         setError(`Borrow limit reached. Maximum active borrows: ${data?.max_active ?? 3}.`);
       } else {
         setError(msg);
@@ -483,12 +494,30 @@ export default function BooksPage() {
                 })}
               </div>
 
-              {queueFull && (
-                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-                  <FiAlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" />
+              {(hasOverdueBook || queueFull) && (
+                <div
+                  className={[
+                    "mt-4 rounded-lg p-4 flex items-start gap-3 border",
+                    hasOverdueBook
+                      ? "border-red-200 bg-red-50"
+                      : "border-amber-200 bg-amber-50",
+                  ].join(" ")}
+                >
+                  <FiAlertCircle
+                    className={[
+                      "flex-shrink-0 mt-0.5",
+                      hasOverdueBook ? "text-red-600" : "text-amber-600",
+                    ].join(" ")}
+                  />
                   <div>
-                    <p className="text-sm font-semibold text-amber-900">Maximum borrows reached</p>
-                    <p className="text-xs text-amber-700 mt-1">You can only have {MAX_ACTIVE} active requests/borrows. Cancel or return one to borrow another.</p>
+                    <p className={["text-sm font-semibold", hasOverdueBook ? "text-red-900" : "text-amber-900"].join(" ")}>
+                      {hasOverdueBook ? "May overdue book ka" : "Maximum borrows reached"}
+                    </p>
+                    <p className={["text-xs mt-1", hasOverdueBook ? "text-red-700" : "text-amber-700"].join(" ")}>
+                      {hasOverdueBook
+                        ? "Hindi ka muna makakahiram ng panibagong libro. Isauli muna ang overdue book para makapag-borrow ulit."
+                        : `You can only have ${MAX_ACTIVE} active requests/borrows. Cancel or return one to borrow another.`}
+                    </p>
                   </div>
                 </div>
               )}
@@ -692,12 +721,16 @@ export default function BooksPage() {
                         {canBorrow ? (
                           <button
                             className="flex-1 rounded-lg bg-blue-600 px-2 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
-                            disabled={Number(b.copies_available ?? 0) <= 0 || queueFull}
+                            disabled={Number(b.copies_available ?? 0) <= 0 || borrowDisabledByAccount}
                             onClick={() => handleBorrow(b.id)}
                             aria-label={`Borrow ${b.title}`}
                             type="button"
                             title={
-                              queueFull ? `Max ${MAX_ACTIVE} active requests/borrows reached` : undefined
+                              hasOverdueBook
+                                ? "Return your overdue book before borrowing again"
+                                : queueFull
+                                  ? `Max ${MAX_ACTIVE} active requests/borrows reached`
+                                  : undefined
                             }
                           >
                             Borrow
