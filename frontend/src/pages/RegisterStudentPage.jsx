@@ -84,7 +84,8 @@ export default function RegisterStudentPage() {
   const courseOptions = useMemo(() => IMUS_COURSES, []);
 
   const [form, setForm] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
     emailLocal: "",
     password: "",
     student_number: "",
@@ -111,12 +112,18 @@ export default function RegisterStudentPage() {
   }, [resendSeconds]);
 
   function validate() {
-    const name = form.name.trim();
-    if (!name) return "Name is required.";
-    if (name.length > 50) return "Name must be 50 characters or less.";
-    if (!isValidName(name))
-      return "Name must contain letters only (allowed: spaces, dot, hyphen).";
-    if (hasForbiddenChars(name)) return "Name contains forbidden characters.";
+    const firstName = form.first_name.trim();
+    const lastName = form.last_name.trim();
+    if (!firstName) return "First name is required.";
+    if (!lastName) return "Last name is required.";
+    if (firstName.length > 50) return "First name must be 50 characters or less.";
+    if (lastName.length > 50) return "Last name must be 50 characters or less.";
+    if (!isValidName(firstName))
+      return "First name must contain letters only (allowed: spaces, dot, hyphen).";
+    if (!isValidName(lastName))
+      return "Last name must contain letters only (allowed: spaces, dot, hyphen).";
+    if (hasForbiddenChars(firstName)) return "First name contains forbidden characters.";
+    if (hasForbiddenChars(lastName)) return "Last name contains forbidden characters.";
 
     if (!form.emailLocal) return "CVSU email is required.";
     if (hasForbiddenChars(form.emailLocal)) return "Email contains forbidden characters.";
@@ -139,8 +146,12 @@ export default function RegisterStudentPage() {
   }
 
   function registrationPayload() {
+    const firstName = form.first_name.trim();
+    const lastName = form.last_name.trim();
     return {
-      name: form.name.trim(),
+      first_name: firstName,
+      last_name: lastName,
+      name: `${firstName} ${lastName}`.trim(),
       email: fullEmail,
       password: form.password,
       student_number: form.student_number.trim(),
@@ -233,30 +244,56 @@ export default function RegisterStudentPage() {
 
               {/* ✅ 1 column */}
               <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-                {/* Full Name */}
+                {/* First Name */}
                 <div>
-                  <label className="text-sm font-medium text-white/90" htmlFor="name">
-                    Full Name
+                  <label className="text-sm font-medium text-white/90" htmlFor="first_name">
+                    First Name
                   </label>
                   <div className="relative mt-1">
                     <FiUser className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
                     <input
-                      id="name"
+                      id="first_name"
                       className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
-                      value={form.name}
+                      value={form.first_name}
                       onChange={(e) =>
                         setForm({
                           ...form,
-                          name: sanitizeName(e.target.value).slice(0, 50)
+                          first_name: sanitizeName(e.target.value).slice(0, 50)
                         })
                       }
                       required
                       maxLength={50}
                       disabled={otpSent}
-                      placeholder="e.g. Juan D. Cruz"
+                      placeholder="e.g. Juan"
                     />
                   </div>
-                  <div className="mt-1 text-xs text-white/70">{form.name.length}/50</div>
+                  <div className="mt-1 text-xs text-white/70">{form.first_name.length}/50</div>
+                </div>
+
+                {/* Last Name */}
+                <div>
+                  <label className="text-sm font-medium text-white/90" htmlFor="last_name">
+                    Last Name
+                  </label>
+                  <div className="relative mt-1">
+                    <FiUser className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/70" />
+                    <input
+                      id="last_name"
+                      className="w-full rounded-lg border border-white/25 bg-white/10 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/60 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                      value={form.last_name}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          last_name: sanitizeName(e.target.value).slice(0, 50)
+                        })
+                      }
+                      required
+                      maxLength={50}
+                      disabled={otpSent}
+                      placeholder="e.g. Cruz"
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-white/70">{form.last_name.length}/50</div>
                 </div>
 
                 {/* CVSU Email */}

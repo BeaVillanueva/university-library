@@ -220,7 +220,7 @@ export default function BooksPage() {
       voiceAccessibility.announceError(msg);
       
       if (data?.overdue_count || msg.toLowerCase().includes("overdue")) {
-        setError("May overdue book ka pa. Isauli muna ito bago ka ulit makahiram ng panibagong libro.");
+        setError("You currently have an overdue book. Please return the overdue item before borrowing another book.");
       } else if (msg === "Borrow limit reached") {
         setError(`Borrow limit reached. Maximum active borrows: ${data?.max_active ?? 3}.`);
       } else {
@@ -511,11 +511,11 @@ export default function BooksPage() {
                   />
                   <div>
                     <p className={["text-sm font-semibold", hasOverdueBook ? "text-red-900" : "text-amber-900"].join(" ")}>
-                      {hasOverdueBook ? "May overdue book ka" : "Maximum borrows reached"}
+                      {hasOverdueBook ? "You Have an Overdue Book" : "Maximum borrows reached"}
                     </p>
                     <p className={["text-xs mt-1", hasOverdueBook ? "text-red-700" : "text-amber-700"].join(" ")}>
                       {hasOverdueBook
-                        ? "Hindi ka muna makakahiram ng panibagong libro. Isauli muna ang overdue book para makapag-borrow ulit."
+                        ? "You currently have an overdue book. Please return the overdue item before borrowing another book."
                         : `You can only have ${MAX_ACTIVE} active requests/borrows. Cancel or return one to borrow another.`}
                     </p>
                   </div>

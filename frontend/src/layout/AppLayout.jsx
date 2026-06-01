@@ -22,6 +22,7 @@ import {
   FiChevronUp,
   FiLogOut,
   FiUser,
+  FiEdit3,
 } from "react-icons/fi";
 
 const LS_SIDEBAR_COLLAPSED = "ulms_sidebar_collapsed";
@@ -112,6 +113,33 @@ function SubLinkItem({ to, label, onNavigate, collapsed, end = false, badge }) {
         </span>
       ) : null}
     </NavLink>
+  );
+}
+
+function RoleAvatar({ role }) {
+  const normalizedRole = String(role || "").toLowerCase();
+  const Icon =
+    normalizedRole === "librarian"
+      ? FiBookOpen
+      : normalizedRole === "admin" || normalizedRole === "teacher"
+        ? FiEdit3
+        : FiUser;
+
+  const title =
+    normalizedRole === "librarian"
+      ? "Librarian"
+      : normalizedRole === "admin" || normalizedRole === "teacher"
+        ? "Teacher"
+        : "Student";
+
+  return (
+    <div
+      className="h-10 w-10 shrink-0 rounded-full bg-white/20 ring-2 ring-white/20 flex items-center justify-center"
+      title={title}
+      aria-label={`${title} account`}
+    >
+      <Icon size={19} className="text-[#d6a436]" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -313,7 +341,7 @@ export default function AppLayout() {
             ) : (
               <div className="rounded-3xl bg-white/10 px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-white/20 ring-2 ring-white/20" />
+                  <RoleAvatar role={role} />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold leading-tight">
                       {user?.name || "User"}

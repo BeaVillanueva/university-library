@@ -108,12 +108,12 @@ final class AuthController {
     }
   }
 
-  private static function ensureValidName(string $name): void {
-    if (mb_strlen($name) > 50) Http::error('Name must be 50 characters or less', 422);
+  private static function ensureValidName(string $name, string $label = 'Name'): void {
+    if (mb_strlen($name) > 50) Http::error($label . ' must be 50 characters or less', 422);
     if (!preg_match('/^[A-Za-z][A-Za-z\s.-]*$/', $name)) {
-      Http::error('Name must contain letters only (allowed: spaces, dot, hyphen)', 422);
+      Http::error($label . ' must contain letters only (allowed: spaces, dot, hyphen)', 422);
     }
-    self::ensureNoForbidden('Name', $name);
+    self::ensureNoForbidden($label, $name);
   }
 
   private static function titleCaseName(string $s): string {
@@ -150,17 +150,35 @@ final class AuthController {
     ");
   }
 
+  private static function ensureUserNameColumns(PDO $pdo): void {
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(60) NULL AFTER id");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(60) NULL AFTER first_name");
+  }
+
   private static function registrationPayloadFromBody(array $b): array {
+    $firstNameRaw = trim((string)($b['first_name'] ?? ''));
+    $lastNameRaw = trim((string)($b['last_name'] ?? ''));
     $nameRaw = trim((string)($b['name'] ?? ''));
     $email = trim((string)($b['email'] ?? ''));
     $password = (string)($b['password'] ?? '');
     $studentNumber = trim((string)($b['student_number'] ?? ''));
     $department = trim((string)($b['department'] ?? ''));
 
-    if ($nameRaw === '' || $email === '' || $password === '') Http::error('name, email, password required', 422);
+    if (($firstNameRaw === '' || $lastNameRaw === '') && $nameRaw !== '') {
+      $parts = preg_split('/\s+/', $nameRaw, 2);
+      $firstNameRaw = trim((string)($parts[0] ?? ''));
+      $lastNameRaw = trim((string)($parts[1] ?? ''));
+    }
 
-    self::ensureValidName($nameRaw);
-    $name = self::titleCaseName($nameRaw);
+    if ($firstNameRaw === '' || $lastNameRaw === '' || $email === '' || $password === '') {
+      Http::error('first_name, last_name, email, password required', 422);
+    }
+
+    self::ensureValidName($firstNameRaw, 'First name');
+    self::ensureValidName($lastNameRaw, 'Last name');
+    $firstName = self::titleCaseName($firstNameRaw);
+    $lastName = self::titleCaseName($lastNameRaw);
+    $name = trim($firstName . ' ' . $lastName);
 
     self::ensureNoForbidden('Email', $email);
     self::ensureNoForbidden('Student number', $studentNumber);
@@ -176,6 +194,8 @@ final class AuthController {
     self::ensureNoForbidden('Password', $password);
 
     return [
+      'first_name' => $firstName,
+      'last_name' => $lastName,
       'name' => $name,
       'email' => $email,
       'password' => $password,
@@ -386,6 +406,7 @@ final class AuthController {
   public static function requestRegistrationOtp(PDO $pdo, array $config): void {
     $b = Http::readJsonBody();
     $payload = self::registrationPayloadFromBody($b);
+    self::ensureUserNameColumns($pdo);
     self::ensureStudentCanRegister($pdo, $payload['email'], $payload['student_number']);
     self::ensureRegistrationOtpTable($pdo);
     $payload['password_hash'] = password_hash((string)$payload['password'], PASSWORD_DEFAULT);
@@ -447,6 +468,7 @@ final class AuthController {
     self::ensureNoForbidden('Email', $email);
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
     self::ensureRegistrationOtpTable($pdo);
+    self::ensureUserNameColumns($pdo);
 
     $stmtOtp = $pdo->prepare("
       SELECT id, email, student_number, payload_json, otp_hash, expires_at
@@ -477,7 +499,9 @@ final class AuthController {
         $existingId = (int)$existing['id'];
         $stmtUpd = $pdo->prepare("
           UPDATE users
-          SET name = ?,
+          SET first_name = ?,
+              last_name = ?,
+              name = ?,
               email = ?,
               password_hash = ?,
               department = ?,
@@ -486,6 +510,8 @@ final class AuthController {
           WHERE id = ?
         ");
         $stmtUpd->execute([
+          (string)$payload['first_name'],
+          (string)$payload['last_name'],
           (string)$payload['name'],
           (string)$payload['email'],
           $hash,
@@ -522,10 +548,12 @@ final class AuthController {
       }
 
       $stmt = $pdo->prepare("
-        INSERT INTO users (name, email, password_hash, role, department, student_number, status)
-        VALUES (?,?,?,?,?,?,?)
+        INSERT INTO users (first_name, last_name, name, email, password_hash, role, department, student_number, status)
+        VALUES (?,?,?,?,?,?,?,?,?)
       ");
       $stmt->execute([
+        (string)$payload['first_name'],
+        (string)$payload['last_name'],
         (string)$payload['name'],
         (string)$payload['email'],
         $hash,
