@@ -169,6 +169,9 @@ export default function RegisterStudentPage() {
   }
 
   async function sendRegistrationCode() {
+    setError("");
+    setNotice("");
+
     const msg = validate();
     if (msg) {
       setError(msg);
@@ -182,9 +185,35 @@ export default function RegisterStudentPage() {
       setOtpSent(true);
       setOtp("");
       setResendSeconds(30);
-      setNotice("Authentication code sent. Please check your CVSU email. It expires in 15 minutes.");
+      setNotice("Authentication code sent. Please check your CVSU email. It expires in 5 minutes.");
     } catch (e2) {
       setError(e2?.response?.data?.error || e2?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyRegistrationCode(e) {
+    if (e) e.preventDefault();
+    setError("");
+    setNotice("");
+
+    if (otp.trim().length !== 6) {
+      setError("Enter the 6-digit authentication code sent to your CVSU email.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiRegisterStudent({
+        email: otpEmail || fullEmail,
+        otp: otp.trim(),
+      });
+
+      setNotice("Registration verified. You can now log in.");
+      setTimeout(() => nav("/login"), 1200);
+    } catch (e2) {
+      setError(e2?.response?.data?.error || e2?.message || "OTP verification failed");
     } finally {
       setLoading(false);
     }
@@ -195,34 +224,84 @@ export default function RegisterStudentPage() {
     setError("");
     setNotice("");
 
-    if (otpSent) {
-      if (otp.trim().length !== 6) {
-        setError("Enter the 6-digit authentication code sent to your CVSU email.");
-        return;
-      }
-
-      setLoading(true);
-      try {
-        await apiRegisterStudent({
-          email: otpEmail || fullEmail,
-          otp: otp.trim(),
-        });
-
-        setNotice("Registration verified. You can now log in.");
-        setTimeout(() => nav("/login"), 1200);
-      } catch (e2) {
-        setError(e2?.response?.data?.error || e2?.message || "OTP verification failed");
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     await sendRegistrationCode();
   }
 
   return (
     <div className="min-h-screen w-full">
+      {otpSent ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div
+            className={[
+              "w-full max-w-md rounded-2xl border border-white/25 p-6 shadow-2xl",
+              "bg-slate-950/80 text-white backdrop-blur-xl",
+              a11yMode ? "a11y-outline" : ""
+            ].join(" ")}
+          >
+            <form className="space-y-4" onSubmit={verifyRegistrationCode}>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-white/90" htmlFor="otp">
+                  Authentication Code
+                </label>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-white hover:underline disabled:opacity-60"
+                  onClick={editDetails}
+                  disabled={loading}
+                >
+                  Edit details
+                </button>
+              </div>
+
+              <input
+                id="otp"
+                className="w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                required
+                autoFocus
+              />
+
+              <div className="text-xs text-white/70">
+                Enter the 6-digit code sent to {otpEmail || fullEmail}. It expires in 5 minutes.
+              </div>
+
+              <button
+                type="button"
+                className="text-xs font-semibold text-white hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={sendRegistrationCode}
+                disabled={loading || resendSeconds > 0}
+              >
+                {resendSeconds > 0
+                  ? `Resend code in ${resendSeconds}s`
+                  : "Resend authentication code"}
+              </button>
+
+              {notice ? (
+                <div className="rounded-lg border border-emerald-200/30 bg-emerald-500/15 px-3 py-2 text-sm text-white">
+                  {notice}
+                </div>
+              ) : null}
+              {error ? (
+                <div className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white">
+                  {error}
+                </div>
+              ) : null}
+
+              <button
+                className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
+                disabled={loading}
+              >
+                {loading ? "Submitting..." : "Verify Code and Create Account"}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <div
         className="min-h-screen w-full bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: "url(/imus-campus.jpg)" }}
@@ -425,59 +504,6 @@ export default function RegisterStudentPage() {
                   </div>
                 </div>
 
-
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm font-medium text-white/90" htmlFor="otp">
-                      Authentication Code
-                    </label>
-                    {otpSent ? (
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-white hover:underline disabled:opacity-60"
-                        onClick={editDetails}
-                        disabled={loading}
-                      >
-                        Edit details
-                      </button>
-                    ) : null}
-                  </div>
-                  <input
-                    id="otp"
-                    className="mt-1 w-full rounded-lg border border-white/25 bg-white/10 px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-white placeholder:text-white/50 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="000000"
-                    disabled={!otpSent}
-                    required={otpSent}
-                  />
-                  <div className="mt-1 text-xs text-white/70">
-                    {otpSent
-                      ? `Enter the 6-digit code sent to ${otpEmail || fullEmail}. It expires in 15 minutes.`
-                      : "Click Send Authentication Code first. Only @cvsu.edu.ph emails can receive a code."}
-                  </div>
-                  {otpSent ? (
-                    <button
-                      type="button"
-                      className="mt-2 text-xs font-semibold text-white hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={sendRegistrationCode}
-                      disabled={loading || resendSeconds > 0}
-                    >
-                      {resendSeconds > 0
-                        ? `Resend code in ${resendSeconds}s`
-                        : "Resend authentication code"}
-                    </button>
-                  ) : null}
-                </div>
-
-
-                {notice ? (
-                  <div className="rounded-lg border border-emerald-200/30 bg-emerald-500/15 px-3 py-2 text-sm text-white">
-                    {notice}
-                  </div>
-                ) : null}
                 {error ? (
                   <div className="rounded-lg border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm text-white">
                     {error}
@@ -488,7 +514,7 @@ export default function RegisterStudentPage() {
                   className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-green-700 px-3 py-3 text-sm font-semibold text-white shadow-lg hover:from-emerald-400 hover:to-green-600 disabled:opacity-60"
                   disabled={loading}
                 >
-                  {loading ? "Submitting..." : otpSent ? "Verify Code and Create Account" : "Send Authentication Code"}
+                  {loading ? "Submitting..." : "Register"}
                 </button>
 
                 <div className="text-center text-sm text-white/90">

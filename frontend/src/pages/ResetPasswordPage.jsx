@@ -246,7 +246,7 @@ export default function ResetPasswordPage() {
                     />
                   </div>
                   <div className="mt-1 text-xs text-white/70">
-                    Enter the 6-digit code from your email. It expires in 15 minutes.
+                    Enter the 6-digit code from your email. It expires in 5 minutes.
                   </div>
                 </div>
 

@@ -413,7 +413,7 @@ final class AuthController {
     unset($payload['password']);
 
     $otp = (string)random_int(100000, 999999);
-    $expiresAt = (new DateTimeImmutable('+15 minutes'))->format('Y-m-d H:i:s');
+    $expiresAt = (new DateTimeImmutable('+5 minutes'))->format('Y-m-d H:i:s');
 
     $pdo->prepare("DELETE FROM registration_otps WHERE email = ? OR student_number = ?")
       ->execute([$payload['email'], $payload['student_number']]);
@@ -429,20 +429,20 @@ final class AuthController {
       $expiresAt,
     ]);
 
-    $subject = 'Your CVSU Library registration OTP';
+    $subject = 'Complete your CVSU Library registration';
     $html = '
       <div style="font-family:Arial,sans-serif; line-height:1.6">
         <h2>Registration Verification</h2>
-        <p>Use this OTP to complete your CVSU Imus Library account registration:</p>
+        <p>Use this authentication code to complete your CVSU Imus Library account registration:</p>
         <p style="font-size:28px; font-weight:bold; letter-spacing:4px;">' . htmlspecialchars($otp, ENT_QUOTES, 'UTF-8') . '</p>
-        <p>This code will expire in <b>15 minutes</b>.</p>
+        <p>This code will expire in <b>5 minutes</b>.</p>
         <p>If you did not request this, you can ignore this email.</p>
       </div>
     ';
-    $text = "Your CVSU Library registration OTP is {$otp}. It expires in 15 minutes.";
+    $text = "Your CVSU Library registration authentication code is {$otp}. It expires in 5 minutes.";
 
     try {
-      Mailer::send($config['app_script_mail'] ?? [], $payload['email'], $payload['name'], $subject, $html, $text);
+      Mailer::send($config['app_script_mail'] ?? [], $payload['email'], (string)$payload['name'], $subject, $html, $text);
     } catch (Throwable $e) {
       $pdo->prepare("DELETE FROM registration_otps WHERE email = ? OR student_number = ?")
         ->execute([$payload['email'], $payload['student_number']]);
@@ -614,7 +614,7 @@ final class AuthController {
     }
 
     $token = (string)random_int(100000, 999999);
-    $expiresAt = (new DateTimeImmutable('+15 minutes'))->format('Y-m-d H:i:s');
+    $expiresAt = (new DateTimeImmutable('+5 minutes'))->format('Y-m-d H:i:s');
 
     $pdo->prepare("DELETE FROM password_resets WHERE email = ?")->execute([$email]);
     $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?,?,?)")
@@ -635,12 +635,12 @@ final class AuthController {
         <p>We received a request to reset your password.</p>
         <p>Your password reset code is:</p>
         <p style="font-size:28px; font-weight:bold; letter-spacing:4px;">' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '</p>
-        <p>This code/link will expire in <b>15 minutes</b>.</p>
+        <p>This code/link will expire in <b>5 minutes</b>.</p>
         <p><a href="' . $safeLink . '">' . $safeLink . '</a></p>
         <p>If you did not request this, you can ignore this email.</p>
       </div>
     ';
-    $text = "Your CVSU Library password reset code is {$token}. It expires in 15 minutes.\nReset link:\n" . $resetLink;
+    $text = "Your CVSU Library password reset code is {$token}. It expires in 5 minutes.\nReset link:\n" . $resetLink;
 
     // Send email through Google Apps Script instead of SMTP.
     Mailer::send($config['app_script_mail'] ?? [], $email, (string)($user['name'] ?? ''), $subject, $html, $text);
