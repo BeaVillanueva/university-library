@@ -20,8 +20,8 @@ final class EmailService {
     $this->smtpSecure = $emailConfig['smtp_secure'] ?? 'tls';
     $this->smtpUser = $emailConfig['smtp_user'] ?? '';
     $this->smtpPass = $emailConfig['smtp_password'] ?? '';
-    $this->fromEmail = $emailConfig['from_email'] ?? $this->smtpUser;
-    $this->fromName = $emailConfig['from_name'] ?? 'CVSU Imus Library';
+    $this->fromEmail = trim((string)($emailConfig['from_email'] ?? '')) ?: $this->smtpUser;
+    $this->fromName = trim((string)($emailConfig['from_name'] ?? '')) ?: 'CVSU Imus Library';
   }
 
   public static function sendOverdueNotification(PDO $pdo, array $config, int $recordId): bool {
@@ -185,7 +185,12 @@ CVSU Imus Library";
     }
 
     if (empty($this->smtpUser) || empty($this->smtpPass)) {
-      error_log("SMTP username or password is missing.");
+      error_log("SMTP username or password is missing. smtp_user_set=" . ($this->smtpUser !== '' ? 'yes' : 'no') . " smtp_pass_set=" . ($this->smtpPass !== '' ? 'yes' : 'no'));
+      return false;
+    }
+
+    if ($this->fromEmail === '') {
+      error_log("SMTP from email is missing.");
       return false;
     }
 

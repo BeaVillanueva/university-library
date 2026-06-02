@@ -139,10 +139,12 @@ final class AuthController {
     $appScriptUrl = trim((string)($appScript['url'] ?? ''));
 
     if ($appScriptUrl !== '') {
+      error_log('Auth email send attempt via Apps Script to ' . $email . ' subject=' . $subject);
       Mailer::send($appScript, $email, $name, $subject, $html, $text);
       return;
     }
 
+    error_log('Auth email send attempt via SMTP to ' . $email . ' subject=' . $subject);
     $emailService = new EmailService($config);
     if (!$emailService->send($email, $subject, $html, true)) {
       throw new RuntimeException('SMTP email send failed. Please check the mailer configuration.');
@@ -158,11 +160,18 @@ final class AuthController {
         payload_json TEXT NOT NULL,
         otp_hash VARCHAR(255) NOT NULL,
         expires_at DATETIME NOT NULL,
+        used TINYINT(1) NOT NULL DEFAULT 0,
+        used_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_registration_otps_email (email),
+        INDEX idx_registration_otps_used (used),
+        INDEX idx_registration_otps_used_at (used_at),
         INDEX idx_registration_otps_expires_at (expires_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+
+    $pdo->exec("ALTER TABLE registration_otps ADD COLUMN IF NOT EXISTS used TINYINT(1) NOT NULL DEFAULT 0 AFTER expires_at");
+    $pdo->exec("ALTER TABLE registration_otps ADD COLUMN IF NOT EXISTS used_at DATETIME NULL AFTER expires_at");
   }
 
   private static function ensurePasswordResetsTable(PDO $pdo): void {
@@ -504,7 +513,7 @@ final class AuthController {
     self::ensureUserNameColumns($pdo);
 
     $stmtOtp = $pdo->prepare("
-      SELECT id, email, student_number, payload_json, otp_hash, expires_at
+      SELECT id, email, student_number, payload_json, otp_hash, expires_at, used, used_at
       FROM registration_otps
       WHERE email = ?
       ORDER BY id DESC
@@ -514,6 +523,9 @@ final class AuthController {
     $row = $stmtOtp->fetch();
 
     if (!$row) Http::error('Please request an OTP first.', 400);
+    if ((int)($row['used'] ?? 0) === 1 || !empty($row['used_at'])) {
+      Http::error('OTP already used. Please request a new OTP.', 400);
+    }
     if (strtotime((string)$row['expires_at']) < time()) {
       $pdo->prepare("DELETE FROM registration_otps WHERE id = ?")->execute([(int)$row['id']]);
       Http::error('OTP expired. Please request a new OTP.', 400);
@@ -528,6 +540,8 @@ final class AuthController {
     if ($hash === '') Http::error('Invalid registration request. Please request a new OTP.', 400);
 
     try {
+      $pdo->beginTransaction();
+
       if ($existing) {
         $existingId = (int)$existing['id'];
         $stmtUpd = $pdo->prepare("
@@ -553,6 +567,12 @@ final class AuthController {
           $existingId,
         ]);
 
+        $stmtUseOtp = $pdo->prepare("UPDATE registration_otps SET used = 1, used_at = NOW() WHERE id = ? AND used = 0 AND used_at IS NULL");
+        $stmtUseOtp->execute([(int)$row['id']]);
+        if ($stmtUseOtp->rowCount() !== 1) {
+          throw new RuntimeException('OTP was already used.');
+        }
+
         ActivityLogger::log($pdo, [
           'actor_user_id' => null,
           'action' => 'auth.register_student_revived',
@@ -570,8 +590,7 @@ final class AuthController {
           ],
         ]);
 
-        $pdo->prepare("DELETE FROM registration_otps WHERE id = ? OR email = ?")
-          ->execute([(int)$row['id'], (string)$payload['email']]);
+        $pdo->commit();
 
         Http::ok([
           'id' => $existingId,
@@ -597,8 +616,11 @@ final class AuthController {
       ]);
 
       $newId = (int)$pdo->lastInsertId();
-      $pdo->prepare("DELETE FROM registration_otps WHERE id = ? OR email = ?")
-        ->execute([(int)$row['id'], (string)$payload['email']]);
+      $stmtUseOtp = $pdo->prepare("UPDATE registration_otps SET used = 1, used_at = NOW() WHERE id = ? AND used = 0 AND used_at IS NULL");
+      $stmtUseOtp->execute([(int)$row['id']]);
+      if ($stmtUseOtp->rowCount() !== 1) {
+        throw new RuntimeException('OTP was already used.');
+      }
 
       ActivityLogger::log($pdo, [
         'actor_user_id' => null,
@@ -616,12 +638,20 @@ final class AuthController {
         ],
       ]);
 
+      $pdo->commit();
+
       Http::ok([
         'id' => $newId,
         'message' => 'Registration verified. You can now log in.'
       ], 201);
     } catch (PDOException $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      error_log('Registration OTP verification error: ' . $e->getMessage());
       Http::error('Failed to register (email or student number may already exist)', 409);
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      error_log('Registration OTP verification error: ' . $e->getMessage());
+      Http::error('Registration verification failed. Please try again.', 500);
     }
   }
 
