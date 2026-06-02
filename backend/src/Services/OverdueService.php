@@ -114,18 +114,45 @@ final class OverdueService {
     self::addColumnIfMissing($pdo, 'borrow_records', 'borrowed_at', 'borrowed_at DATETIME NULL AFTER borrow_date');
     self::addColumnIfMissing($pdo, 'borrow_records', 'due_at', 'due_at DATETIME NULL AFTER due_date');
 
-    $borrowDays = max(1, (int)($config['library']['borrow_days'] ?? 1));
     $pdo->exec("
       UPDATE borrow_records
       SET borrowed_at = TIMESTAMP(borrow_date, '00:00:00')
       WHERE borrowed_at IS NULL
         AND borrow_date IS NOT NULL
     ");
+
+    if (self::columnExists($pdo, 'borrow_records', 'created_at')) {
+      $pdo->exec("
+        UPDATE borrow_records
+        SET borrowed_at = created_at
+        WHERE created_at IS NOT NULL
+          AND borrow_date IS NOT NULL
+          AND DATE(created_at) = borrow_date
+          AND (
+            borrowed_at IS NULL
+            OR TIME(borrowed_at) = '00:00:00'
+          )
+      ");
+    }
+
+    // Preserve legacy due_date values. Do not recalculate old rows with the
+    // current borrow_days config because test configs can make future due dates overdue.
     $pdo->exec("
       UPDATE borrow_records
-      SET due_at = DATE_ADD(borrowed_at, INTERVAL {$borrowDays} DAY)
-      WHERE due_at IS NULL
-        AND borrowed_at IS NOT NULL
+      SET due_at = TIMESTAMP(
+        due_date,
+        CASE
+          WHEN borrowed_at IS NOT NULL AND TIME(borrowed_at) <> '00:00:00'
+            THEN TIME(borrowed_at)
+          ELSE '23:59:59'
+        END
+      )
+      WHERE due_date IS NOT NULL
+        AND (
+          due_at IS NULL
+          OR DATE(due_at) <> due_date
+          OR TIME(due_at) = '00:00:00'
+        )
     ");
   }
 
