@@ -11,6 +11,7 @@ final class EmailService {
   private string $smtpPass;
   private string $fromEmail;
   private string $fromName;
+  private array $appScriptMail;
 
   public function __construct(array $config) {
     $emailConfig = $config['email'] ?? [];
@@ -22,6 +23,7 @@ final class EmailService {
     $this->smtpPass = $emailConfig['smtp_password'] ?? '';
     $this->fromEmail = trim((string)($emailConfig['from_email'] ?? '')) ?: $this->smtpUser;
     $this->fromName = trim((string)($emailConfig['from_name'] ?? '')) ?: 'CVSU Imus Library';
+    $this->appScriptMail = is_array($config['app_script_mail'] ?? null) ? $config['app_script_mail'] : [];
   }
 
   public static function sendOverdueNotification(PDO $pdo, array $config, int $recordId): bool {
@@ -182,6 +184,20 @@ CVSU Imus Library";
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
       error_log("Invalid email address: {$to}");
       return false;
+    }
+
+    $appScriptUrl = trim((string)($this->appScriptMail['url'] ?? ''));
+    if ($appScriptUrl !== '') {
+      try {
+        $html = $isHtml ? $body : nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'));
+        $text = $isHtml ? trim(strip_tags($body)) : $body;
+        error_log("EmailService sending via Apps Script to {$to} subject={$subject}");
+        Mailer::send($this->appScriptMail, $to, '', $subject, $html, $text);
+        return true;
+      } catch (Throwable $e) {
+        error_log("Apps Script email error: " . $e->getMessage());
+        return false;
+      }
     }
 
     if (empty($this->smtpUser) || empty($this->smtpPass)) {

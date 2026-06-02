@@ -49,19 +49,14 @@ class ReminderService {
     foreach ($records as $record) {
       // Send email
       $this->emailService->sendDueDateReminder(
+        $this->pdo,
         $record['email'],
         $record['student_name'],
         $record['book_title'],
         $record['due_date'],
-        $daysUntilDue
+        $daysUntilDue,
+        (int)$record['borrow_id']
       );
-
-      // Log reminder
-      $insertStmt = $this->pdo->prepare("
-        INSERT INTO due_date_reminders (borrow_record_id, user_id, reminder_type)
-        VALUES (?, ?, ?)
-      ");
-      $insertStmt->execute([$record['borrow_id'], $record['user_id'], "{$daysUntilDue}_days"]);
     }
   }
 

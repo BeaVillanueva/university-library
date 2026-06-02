@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/Database.php';
 require_once __DIR__ . '/../src/ActivityLogger.php';
+require_once __DIR__ . '/../src/Utils/Mailer.php';
 require_once __DIR__ . '/../src/Services/OverdueService.php';
 require_once __DIR__ . '/../src/Services/ReminderService.php';
 require_once __DIR__ . '/../src/Services/EmailService.php';

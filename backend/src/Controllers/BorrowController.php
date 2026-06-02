@@ -2,6 +2,24 @@
 declare(strict_types=1);
 
 final class BorrowController {
+  public static function processOverdueReminders(PDO $pdo, array $config, array $auth): void {
+    AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
+
+    $summary = OverdueService::refresh($pdo, $config);
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => (int)($auth['user_id'] ?? 0) ?: null,
+      'action' => 'borrow.overdue_reminders_processed',
+      'entity_type' => 'borrow_record',
+      'entity_id' => null,
+      'details' => $summary,
+    ]);
+
+    Http::ok([
+      'message' => 'Overdue reminders processed.',
+      'summary' => $summary,
+    ]);
+  }
 
   /**
    * Student request borrow ONLY:

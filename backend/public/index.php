@@ -54,6 +54,7 @@ require_once __DIR__ . '/../src/Utils/Csv.php';
 
 require_once __DIR__ . '/../src/Services/EmailService.php';
 require_once __DIR__ . '/../src/Services/OverdueService.php';
+require_once __DIR__ . '/../src/Utils/Mailer.php';
 
 require_once __DIR__ . '/../src/ActivityLogger.php';
 require_once __DIR__ . '/../src/Controllers/ActivityLogsController.php';
@@ -67,8 +68,6 @@ require_once __DIR__ . '/../src/Controllers/BorrowController.php';
 require_once __DIR__ . '/../src/Controllers/ReportsController.php';
 
 require_once __DIR__ . '/../src/Utils/Text.php';
-require_once __DIR__ . '/../src/Utils/Mailer.php';
-
 require_once __DIR__ . '/../src/Controllers/AnnouncementController.php';
 require_once __DIR__ . '/../src/Controllers/UserPreferencesController.php';
 
@@ -203,6 +202,11 @@ $router->add('POST', '/borrow', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['student']);
   BorrowController::borrow(pdo($config), $config, $auth);
+});
+$router->add('POST', '/borrow/overdue-reminders', function () use ($config) {
+  $auth = AuthMiddleware::requireAuth($config);
+  AuthMiddleware::requireRole($auth, ['admin','librarian']);
+  BorrowController::processOverdueReminders(pdo($config), $config, $auth);
 });
 $router->add('GET', '/borrow/my', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
