@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
       {successOpen ? (
         <Modal
           title="Reset code sent"
-          message="We sent a password reset code/link. Please check your Inbox and Spam/Junk. The code expires in 15 minutes."
+          message="We sent a password reset code/link. Please check your Inbox and Spam/Junk. The code expires in 5 minutes."
           confirmText="OK"
           onConfirm={() => {
             setSuccessOpen(false);

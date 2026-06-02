@@ -165,6 +165,24 @@ final class AuthController {
     ");
   }
 
+  private static function ensurePasswordResetsTable(PDO $pdo): void {
+    $pdo->exec("
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        email VARCHAR(190) NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_password_resets_user_id (user_id),
+        INDEX idx_password_resets_email (email),
+        INDEX idx_password_resets_expires_at (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    $pdo->exec("ALTER TABLE password_resets ADD COLUMN IF NOT EXISTS user_id INT NULL AFTER id");
+  }
+
   private static function ensureUserNameColumns(PDO $pdo): void {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(60) NULL AFTER id");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(60) NULL AFTER first_name");
@@ -617,23 +635,23 @@ final class AuthController {
 
     self::ensureNoForbidden('Email', $email);
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
+    self::ensurePasswordResetsTable($pdo);
 
-    $stmt = $pdo->prepare("SELECT id, name FROM users WHERE email = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, name, email FROM users WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
-    // Always return OK (prevents account enumeration)
     if (!$user) {
-      Http::ok(['message' => 'If that email exists, we sent password reset instructions.']);
-      return;
+      Http::error('No account found with this email.', 404);
     }
 
     $token = (string)random_int(100000, 999999);
     $expiresAt = (new DateTimeImmutable('+5 minutes'))->format('Y-m-d H:i:s');
+    $userId = (int)$user['id'];
 
-    $pdo->prepare("DELETE FROM password_resets WHERE email = ?")->execute([$email]);
-    $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?,?,?)")
-      ->execute([$email, password_hash($token, PASSWORD_DEFAULT), $expiresAt]);
+    $pdo->prepare("DELETE FROM password_resets WHERE email = ? OR user_id = ?")->execute([$email, $userId]);
+    $pdo->prepare("INSERT INTO password_resets (user_id, email, token, expires_at) VALUES (?,?,?,?)")
+      ->execute([$userId, $email, password_hash($token, PASSWORD_DEFAULT), $expiresAt]);
 
     $base = rtrim((string)($config['frontend']['base_url'] ?? ''), '/');
     if ($base === '') {
@@ -657,7 +675,13 @@ final class AuthController {
     ';
     $text = "Your CVSU Library password reset code is {$token}. It expires in 5 minutes.\nReset link:\n" . $resetLink;
 
-    self::sendAuthEmail($config, $email, (string)($user['name'] ?? ''), $subject, $html, $text);
+    try {
+      self::sendAuthEmail($config, $email, (string)($user['name'] ?? ''), $subject, $html, $text);
+    } catch (Throwable $e) {
+      $pdo->prepare("DELETE FROM password_resets WHERE email = ? OR user_id = ?")->execute([$email, $userId]);
+      error_log('Password reset email error: ' . $e->getMessage());
+      Http::error('Failed to send reset code. Please check the mailer configuration.', 500);
+    }
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => (int)$user['id'],
@@ -671,14 +695,16 @@ final class AuthController {
     ]);
 
     Http::ok([
-      'message' => 'If that email exists, we sent password reset instructions.'
+      'message' => 'Password reset code sent. Please check your email.',
+      'email' => $email,
+      'expires_at' => $expiresAt,
     ]);
   }
 
   public static function resetPassword(PDO $pdo, array $config): void {
     $b = Http::readJsonBody();
     $email = trim((string)($b['email'] ?? ''));
-    $token = (string)($b['token'] ?? '');
+    $token = preg_replace('/\D+/', '', (string)($b['token'] ?? '')) ?? '';
     $newPassword = (string)($b['new_password'] ?? '');
 
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) Http::error('Valid email required', 422);
@@ -690,25 +716,42 @@ final class AuthController {
     self::ensureEmailDomain($email, '@cvsu.edu.ph');
 
     self::ensureNoForbidden('new_password', $newPassword);
+    self::ensurePasswordResetsTable($pdo);
 
-    $stmt = $pdo->prepare("SELECT email, token, expires_at FROM password_resets WHERE email = ? LIMIT 1");
-    $stmt->execute([$email]);
+    $stmtUser = $pdo->prepare("SELECT id, email FROM users WHERE email = ? LIMIT 1");
+    $stmtUser->execute([$email]);
+    $user = $stmtUser->fetch();
+
+    if (!$user) Http::error('No account found with this email.', 404);
+    $userId = (int)$user['id'];
+
+    $stmt = $pdo->prepare("
+      SELECT user_id, email, token, expires_at
+      FROM password_resets
+      WHERE email = ? AND user_id = ?
+      LIMIT 1
+    ");
+    $stmt->execute([$email, $userId]);
     $row = $stmt->fetch();
 
-    if (!$row) Http::error('Invalid reset token', 400);
+    if (!$row) Http::error('Invalid or missing reset code.', 400);
 
     $expiresAt = (string)$row['expires_at'];
-    if (strtotime($expiresAt) < time()) Http::error('OTP expired. Please request a new code.', 400);
+    if (strtotime($expiresAt) < time()) {
+      $pdo->prepare("DELETE FROM password_resets WHERE email = ? OR user_id = ?")->execute([$email, $userId]);
+      Http::error('Reset code expired. Please request a new code.', 400);
+    }
 
     $hash = (string)$row['token'];
-    if (!password_verify($token, $hash)) Http::error('Invalid reset token', 400);
+    if (!password_verify($token, $hash)) Http::error('Invalid reset code.', 400);
 
-    $pdo->prepare("UPDATE users SET password_hash = ? WHERE email = ?")->execute([
+    $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ? AND email = ?")->execute([
       password_hash($newPassword, PASSWORD_DEFAULT),
+      $userId,
       $email,
     ]);
 
-    $pdo->prepare("DELETE FROM password_resets WHERE email = ?")->execute([$email]);
+    $pdo->prepare("DELETE FROM password_resets WHERE email = ? OR user_id = ?")->execute([$email, $userId]);
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => null,
