@@ -4,6 +4,7 @@ declare(strict_types=1);
 final class OverdueService {
   public static function refresh(PDO $pdo, array $config = []): array {
     self::ensureOverdueReminderStorage($pdo);
+    self::ensureBorrowDateTimeColumns($pdo, $config);
 
     $newOverdueStmt = $pdo->prepare("
       SELECT
@@ -12,6 +13,8 @@ final class OverdueService {
         br.book_id,
         br.borrow_date,
         br.due_date,
+        br.borrowed_at,
+        br.due_at,
         u.name AS student_name,
         u.email AS student_email,
         b.title AS book_title
@@ -20,7 +23,7 @@ final class OverdueService {
       JOIN books b ON b.id = br.book_id
       WHERE br.status = 'borrowed'
         AND br.return_date IS NULL
-        AND br.due_date < CURDATE()
+        AND NOW() > COALESCE(br.due_at, TIMESTAMP(br.due_date, '23:59:59'))
     ");
     $newOverdueStmt->execute();
     $newOverdueRecords = $newOverdueStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -30,7 +33,7 @@ final class OverdueService {
       SET status = 'overdue'
       WHERE status = 'borrowed'
         AND return_date IS NULL
-        AND due_date < CURDATE()
+        AND NOW() > COALESCE(due_at, TIMESTAMP(due_date, '23:59:59'))
     ");
 
     foreach ($newOverdueRecords as $rec) {
@@ -47,6 +50,8 @@ final class OverdueService {
           'book_title' => (string)$rec['book_title'],
           'borrow_date' => (string)$rec['borrow_date'],
           'due_date' => (string)$rec['due_date'],
+          'borrowed_at' => (string)($rec['borrowed_at'] ?? ''),
+          'due_at' => (string)($rec['due_at'] ?? ''),
           'from_status' => 'borrowed',
           'to_status' => 'overdue',
         ],
@@ -58,7 +63,7 @@ final class OverdueService {
       SET status = 'borrowed'
       WHERE status = 'overdue'
         AND return_date IS NULL
-        AND due_date > CURDATE()
+        AND NOW() <= COALESCE(due_at, TIMESTAMP(due_date, '23:59:59'))
     ");
 
     $summary = self::createOverdueNotifications($pdo, $config);
@@ -98,8 +103,30 @@ final class OverdueService {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
+    self::addColumnIfMissing($pdo, 'overdue_notifications', 'record_id', 'record_id INT NULL');
+    self::addColumnIfMissing($pdo, 'overdue_notifications', 'notified_date', 'notified_date DATE NULL');
+    self::addColumnIfMissing($pdo, 'overdue_notifications', 'student_email', 'student_email VARCHAR(190) NULL');
     self::addColumnIfMissing($pdo, 'borrow_records', 'overdue_email_sent', 'overdue_email_sent TINYINT(1) NOT NULL DEFAULT 0');
     self::addColumnIfMissing($pdo, 'borrow_records', 'overdue_email_sent_at', 'overdue_email_sent_at DATETIME NULL AFTER overdue_email_sent');
+  }
+
+  public static function ensureBorrowDateTimeColumns(PDO $pdo, array $config = []): void {
+    self::addColumnIfMissing($pdo, 'borrow_records', 'borrowed_at', 'borrowed_at DATETIME NULL AFTER borrow_date');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'due_at', 'due_at DATETIME NULL AFTER due_date');
+
+    $borrowDays = max(1, (int)($config['library']['borrow_days'] ?? 1));
+    $pdo->exec("
+      UPDATE borrow_records
+      SET borrowed_at = TIMESTAMP(borrow_date, '00:00:00')
+      WHERE borrowed_at IS NULL
+        AND borrow_date IS NOT NULL
+    ");
+    $pdo->exec("
+      UPDATE borrow_records
+      SET due_at = DATE_ADD(borrowed_at, INTERVAL {$borrowDays} DAY)
+      WHERE due_at IS NULL
+        AND borrowed_at IS NOT NULL
+    ");
   }
 
   private static function createOverdueNotifications(PDO $pdo, array $config = []): array {
@@ -107,6 +134,8 @@ final class OverdueService {
       SELECT 
         br.id AS record_id,
         br.due_date,
+        br.borrowed_at,
+        br.due_at,
         u.email AS student_email,
         u.name AS student_name,
         b.title AS book_title
@@ -118,12 +147,13 @@ final class OverdueService {
        AND n.notified_date = CURDATE()
       WHERE br.status IN ('borrowed', 'overdue')
         AND br.return_date IS NULL
-        AND br.due_date < CURDATE()
+        AND NOW() > COALESCE(br.due_at, TIMESTAMP(br.due_date, '23:59:59'))
         AND n.id IS NULL
       LIMIT 50
     ");
     $stmt->execute();
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    error_log('OverdueService overdue records ready for reminders: ' . count($records));
 
     $summary = [
       'checked_records' => count($records),
@@ -139,7 +169,11 @@ final class OverdueService {
         continue;
       }
 
-      $daysOverdue = max(0, (int) floor((strtotime(date('Y-m-d')) - strtotime($rec['due_date'])) / 86400));
+      $dueAt = (string)($rec['due_at'] ?? '');
+      $borrowedAt = (string)($rec['borrowed_at'] ?? '');
+      $dueLabel = $dueAt !== '' ? $dueAt : (string)$rec['due_date'];
+      $borrowedLabel = $borrowedAt !== '' ? $borrowedAt : 'Not recorded';
+      $daysOverdue = max(0, (int) floor((time() - strtotime($dueLabel)) / 86400));
 
       $subject = "URGENT: Overdue Book Notification - CVSU Imus Library";
 
@@ -148,7 +182,8 @@ final class OverdueService {
 This is to notify you that your borrowed book from CVSU Imus Library is now OVERDUE.
 
 Book Title: {$rec['book_title']}
-Due Date: {$rec['due_date']}
+Borrowed At: {$borrowedLabel}
+Due At: {$dueLabel}
 Days Overdue: {$daysOverdue} day(s)
 
 Please return the book immediately to avoid penalties.
@@ -185,6 +220,7 @@ CVSU Imus Library";
         ");
         $update->execute([$rec['record_id']]);
         $summary['sent']++;
+        error_log('Overdue email sent to ' . $rec['student_email'] . ' for borrow record ' . $rec['record_id']);
 
         ActivityLogger::log($pdo, [
           'actor_user_id' => null,
@@ -196,6 +232,8 @@ CVSU Imus Library";
             'student_name' => (string)$rec['student_name'],
             'book_title' => (string)$rec['book_title'],
             'due_date' => (string)$rec['due_date'],
+            'borrowed_at' => $borrowedLabel,
+            'due_at' => $dueLabel,
             'days_overdue' => $daysOverdue,
           ],
         ]);
@@ -213,6 +251,8 @@ CVSU Imus Library";
             'student_name' => (string)$rec['student_name'],
             'book_title' => (string)$rec['book_title'],
             'due_date' => (string)$rec['due_date'],
+            'borrowed_at' => $borrowedLabel,
+            'due_at' => $dueLabel,
             'days_overdue' => $daysOverdue,
           ],
         ]);

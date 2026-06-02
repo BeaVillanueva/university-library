@@ -28,6 +28,7 @@ final class BorrowController {
    */
   public static function borrow(PDO $pdo, array $config, array $auth): void {
     OverdueService::refresh($pdo, $config);
+    OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
 
     // ✅ Student-only (extra safety kahit naka student-only na sa index.php)
     AuthMiddleware::requireRole($auth, ['student']);
@@ -204,8 +205,12 @@ final class BorrowController {
       Http::error('No copies available', 409);
     }
 
-    $borrowDate = date('Y-m-d');
-    $dueDate = date('Y-m-d', strtotime('+' . (int)$config['library']['borrow_days'] . ' days'));
+    $borrowedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+    $dueAt = (new DateTimeImmutable('now'))
+      ->modify('+' . (int)$config['library']['borrow_days'] . ' days')
+      ->format('Y-m-d H:i:s');
+    $borrowDate = substr($borrowedAt, 0, 10);
+    $dueDate = substr($dueAt, 0, 10);
 
     // ✅ always pending (approval required)
     $status = 'pending';
@@ -213,10 +218,10 @@ final class BorrowController {
     $pdo->beginTransaction();
     try {
       $ins = $pdo->prepare("
-        INSERT INTO borrow_records (user_id, book_id, borrow_date, due_date, status)
-        VALUES (?,?,?,?, ?)
+        INSERT INTO borrow_records (user_id, book_id, borrow_date, borrowed_at, due_date, due_at, status)
+        VALUES (?,?,?,?,?,?,?)
       ");
-      $ins->execute([$userId, $bookId, $borrowDate, $dueDate, $status]);
+      $ins->execute([$userId, $bookId, $borrowDate, $borrowedAt, $dueDate, $dueAt, $status]);
 
       $recordId = (int)$pdo->lastInsertId();
 
@@ -232,6 +237,8 @@ final class BorrowController {
           'book_title' => (string)($book['title'] ?? ''),
           'borrow_date' => $borrowDate,
           'due_date' => $dueDate,
+          'borrowed_at' => $borrowedAt,
+          'due_at' => $dueAt,
           'status' => $status,
         ],
       ]);
@@ -239,6 +246,8 @@ final class BorrowController {
       Http::ok([
         'message' => 'Borrow request submitted (Pending approval)',
         'due_date' => $dueDate,
+        'borrowed_at' => $borrowedAt,
+        'due_at' => $dueAt,
         'status' => $status,
         'record_id' => $recordId
       ], 201);
@@ -269,6 +278,7 @@ final class BorrowController {
    */
   public static function approve(PDO $pdo, array $config, array $auth, int $recordId): void {
     OverdueService::refresh($pdo, $config);
+    OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
 
     AuthMiddleware::requireRole($auth, ['librarian']);
 
@@ -305,6 +315,13 @@ final class BorrowController {
 
     $pdo->beginTransaction();
     try {
+      $borrowedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+      $dueAt = (new DateTimeImmutable('now'))
+        ->modify('+' . (int)$config['library']['borrow_days'] . ' days')
+        ->format('Y-m-d H:i:s');
+      $borrowDate = substr($borrowedAt, 0, 10);
+      $dueDate = substr($dueAt, 0, 10);
+
       $updBook = $pdo->prepare("
         UPDATE books
         SET copies_available = copies_available - 1
@@ -317,10 +334,14 @@ final class BorrowController {
 
       $updRec = $pdo->prepare("
         UPDATE borrow_records
-        SET status = 'borrowed'
+        SET status = 'borrowed',
+            borrow_date = ?,
+            borrowed_at = ?,
+            due_date = ?,
+            due_at = ?
         WHERE id = ? AND status = 'pending'
       ");
-      $updRec->execute([$recordId]);
+      $updRec->execute([$borrowDate, $borrowedAt, $dueDate, $dueAt, $recordId]);
       if ($updRec->rowCount() !== 1) {
         throw new RuntimeException('Failed to approve request');
       }
@@ -336,6 +357,8 @@ final class BorrowController {
           'borrower_user_id' => (int)$rec['user_id'],
           'book_id' => (int)$rec['book_id'],
           'book_title' => (string)($rec['book_title'] ?? ''),
+          'borrowed_at' => $borrowedAt,
+          'due_at' => $dueAt,
         ],
       ]);
 

@@ -27,6 +27,7 @@ class ReminderService {
       SELECT 
         br.id as borrow_id,
         br.due_date,
+        br.due_at,
         u.id as user_id,
         u.email,
         u.name as student_name,
@@ -34,7 +35,7 @@ class ReminderService {
       FROM borrow_records br
       JOIN users u ON u.id = br.user_id
       JOIN books b ON b.id = br.book_id
-      WHERE DATE(br.due_date) = ?
+      WHERE DATE(COALESCE(br.due_at, TIMESTAMP(br.due_date, '23:59:59'))) = ?
         AND br.status = 'borrowed'
         AND br.return_date IS NULL
         AND NOT EXISTS (
@@ -53,7 +54,7 @@ class ReminderService {
         $record['email'],
         $record['student_name'],
         $record['book_title'],
-        $record['due_date'],
+        $record['due_at'] ?: $record['due_date'],
         $daysUntilDue,
         (int)$record['borrow_id']
       );
@@ -64,12 +65,12 @@ class ReminderService {
    * Process overdue notifications (run via cron)
    */
   public function processOverdueNotifications(): void {
-    $today = date('Y-m-d');
-
     $stmt = $this->pdo->prepare("
       SELECT 
         br.id as borrow_id,
         br.due_date,
+        br.borrowed_at,
+        br.due_at,
         u.id as user_id,
         u.email,
         u.name as student_name,
@@ -78,43 +79,65 @@ class ReminderService {
       FROM borrow_records br
       JOIN users u ON u.id = br.user_id
       JOIN books b ON b.id = br.book_id
-      WHERE br.due_date < ?
+      LEFT JOIN overdue_notifications n
+        ON n.record_id = br.id
+       AND n.notified_date = CURDATE()
+      WHERE NOW() > COALESCE(br.due_at, TIMESTAMP(br.due_date, '23:59:59'))
         AND br.status = 'borrowed'
         AND br.return_date IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM overdue_notifications
-          WHERE borrow_record_id = br.id
-        )
+        AND n.id IS NULL
     ");
-    $stmt->execute([$today]);
+    $stmt->execute();
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    error_log('ReminderService overdue records found: ' . count($records));
+
     foreach ($records as $record) {
-      $daysOverdue = (int) date_diff(
-        date_create($record['due_date']),
-        date_create($today)
-      )->format('%r%a');
+      $dueLabel = (string)($record['due_at'] ?: $record['due_date']);
+      $borrowedLabel = (string)($record['borrowed_at'] ?: 'Not recorded');
+      $daysOverdue = max(0, (int) floor((time() - strtotime($dueLabel)) / 86400));
 
-      // Send email
-      $this->emailService->sendOverdueNotification(
-        $record['email'],
-        $record['student_name'],
-        $record['book_title'],
-        $record['due_date'],
-        abs($daysOverdue)
-      );
+      $subject = "URGENT: Overdue Book Notification - CVSU Imus Library";
+      $body = "Dear {$record['student_name']},
 
-      // Log notification
+This is to notify you that your borrowed book from CVSU Imus Library is now OVERDUE.
+
+Book Title: {$record['book_title']}
+Borrowed At: {$borrowedLabel}
+Due At: {$dueLabel}
+Days Overdue: {$daysOverdue} day(s)
+
+Please return the book immediately to avoid penalties.
+
+Thank you,
+CVSU Imus Library";
+
+      $sent = $this->emailService->send($record['email'], $subject, $body);
+
+      if (!$sent) {
+        error_log('ReminderService overdue email failed for borrow record ' . $record['borrow_id']);
+        continue;
+      }
+
       $insertStmt = $this->pdo->prepare("
-        INSERT INTO overdue_notifications (borrow_record_id, user_id, book_id, days_overdue)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO overdue_notifications (record_id, notified_date, student_email)
+        VALUES (?, CURDATE(), ?)
       ");
       $insertStmt->execute([
         $record['borrow_id'],
-        $record['user_id'],
-        $record['book_id'],
-        $daysOverdue
+        $record['email']
       ]);
+
+      $updateStmt = $this->pdo->prepare("
+        UPDATE borrow_records
+        SET overdue_email_sent = 1,
+            overdue_email_sent_at = NOW()
+        WHERE id = ?
+          AND return_date IS NULL
+      ");
+      $updateStmt->execute([$record['borrow_id']]);
+
+      error_log('ReminderService overdue email sent for borrow record ' . $record['borrow_id']);
     }
   }
 }

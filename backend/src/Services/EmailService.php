@@ -35,6 +35,8 @@ final class EmailService {
           br.book_id,
           br.borrow_date,
           br.due_date,
+          br.borrowed_at,
+          br.due_at,
           br.status,
           u.name AS student_name,
           u.email AS student_email,
@@ -67,14 +69,13 @@ final class EmailService {
         return true;
       }
 
-      $dueDate = strtotime($record['due_date']);
-      $today = strtotime(date('Y-m-d'));
-      $daysOverdue = max(0, (int) floor(($today - $dueDate) / 86400));
+      $dueLabel = (string)($record['due_at'] ?: $record['due_date']);
+      $borrowedLabel = (string)($record['borrowed_at'] ?: $record['borrow_date']);
+      $daysOverdue = max(0, (int) floor((time() - strtotime($dueLabel)) / 86400));
 
       $studentName = htmlspecialchars($record['student_name']);
       $bookTitle = htmlspecialchars($record['book_title']);
       $studentEmail = $record['student_email'];
-      $dueDateFormatted = $record['due_date'];
 
       $subject = "URGENT: Overdue Book Notification - CVSU Imus Library";
 
@@ -83,7 +84,8 @@ final class EmailService {
 This is to notify you that the following book borrowed from CVSU Imus Library is now OVERDUE:
 
 Book Title: {$bookTitle}
-Due Date: {$dueDateFormatted}
+Borrowed At: {$borrowedLabel}
+Due At: {$dueLabel}
 Days Overdue: {$daysOverdue} day(s)
 
 Please return the book immediately to avoid any penalties or fines. If the book has already been returned, please disregard this notice.
@@ -103,7 +105,8 @@ CVSU Imus Library";
 
         $updateStmt = $pdo->prepare("
           UPDATE borrow_records
-          SET overdue_email_sent = 1
+          SET overdue_email_sent = 1,
+              overdue_email_sent_at = NOW()
           WHERE id = ?
         ");
         $updateStmt->execute([$recordId]);
