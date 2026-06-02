@@ -134,6 +134,21 @@ final class AuthController {
     return implode(' ', $out);
   }
 
+  private static function sendAuthEmail(array $config, string $email, string $name, string $subject, string $html, string $text): void {
+    $appScript = $config['app_script_mail'] ?? [];
+    $appScriptUrl = trim((string)($appScript['url'] ?? ''));
+
+    if ($appScriptUrl !== '') {
+      Mailer::send($appScript, $email, $name, $subject, $html, $text);
+      return;
+    }
+
+    $emailService = new EmailService($config);
+    if (!$emailService->send($email, $subject, $html, true)) {
+      throw new RuntimeException('SMTP email send failed. Please check the mailer configuration.');
+    }
+  }
+
   private static function ensureRegistrationOtpTable(PDO $pdo): void {
     $pdo->exec("
       CREATE TABLE IF NOT EXISTS registration_otps (
@@ -442,7 +457,7 @@ final class AuthController {
     $text = "Your CVSU Library registration authentication code is {$otp}. It expires in 5 minutes.";
 
     try {
-      Mailer::send($config['app_script_mail'] ?? [], $payload['email'], (string)$payload['name'], $subject, $html, $text);
+      self::sendAuthEmail($config, $payload['email'], (string)$payload['name'], $subject, $html, $text);
     } catch (Throwable $e) {
       $pdo->prepare("DELETE FROM registration_otps WHERE email = ? OR student_number = ?")
         ->execute([$payload['email'], $payload['student_number']]);
@@ -642,8 +657,7 @@ final class AuthController {
     ';
     $text = "Your CVSU Library password reset code is {$token}. It expires in 5 minutes.\nReset link:\n" . $resetLink;
 
-    // Send email through Google Apps Script instead of SMTP.
-    Mailer::send($config['app_script_mail'] ?? [], $email, (string)($user['name'] ?? ''), $subject, $html, $text);
+    self::sendAuthEmail($config, $email, (string)($user['name'] ?? ''), $subject, $html, $text);
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => (int)$user['id'],

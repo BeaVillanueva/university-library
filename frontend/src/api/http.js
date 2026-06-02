@@ -3,6 +3,10 @@ import axios from "axios";
 const LS_API_BASE = "ulms_api_base_url";
 
 function getBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
   const fromLs = localStorage.getItem(LS_API_BASE);
 
   if (fromLs && fromLs.startsWith("http")) {
@@ -18,7 +22,7 @@ function getBaseUrl() {
   const defaultUrl =
     `${protocol}//${host}/university-library/backend/public/index.php`;
 
-  return import.meta.env.VITE_API_BASE_URL || defaultUrl;
+  return defaultUrl;
 }
 
 export function setApiBaseUrl(next) {

@@ -1,25 +1,42 @@
 <?php
 declare(strict_types=1);
 
+$backendEnv = __DIR__ . '/../.env';
+$frontendEnv = __DIR__ . '/../../frontend/.env';
+$backendEnvValues = is_file($backendEnv) ? parse_ini_file($backendEnv, false, INI_SCANNER_RAW) : [];
+$frontendEnvValues = is_file($frontendEnv) ? parse_ini_file($frontendEnv, false, INI_SCANNER_RAW) : [];
+
+$env = static function (string $key, mixed $default = '') use ($backendEnvValues, $frontendEnvValues): mixed {
+  $value = getenv($key);
+  if ($value !== false && $value !== '') return $value;
+  if (is_array($backendEnvValues) && array_key_exists($key, $backendEnvValues)) {
+    return $backendEnvValues[$key];
+  }
+  if (is_array($frontendEnvValues) && array_key_exists($key, $frontendEnvValues)) {
+    return $frontendEnvValues[$key];
+  }
+  return $default;
+};
+
 return [
   'app' => [
-    'env' => getenv('APP_ENV') ?: 'local',
-    'base_url' => getenv('APP_URL') ?: 'http://localhost/university-library/backend/public/index.php',
-    'timezone' => getenv('APP_TIMEZONE') ?: 'Asia/Manila',
+    'env' => $env('APP_ENV', 'local'),
+    'base_url' => $env('APP_URL', 'http://localhost/university-library/backend/public/index.php'),
+    'timezone' => $env('APP_TIMEZONE', 'Asia/Manila'),
   ],
 
   'frontend' => [
-    'base_url' => getenv('FRONTEND_URL') ?: 'http://localhost:5173',
+    'base_url' => $env('FRONTEND_URL', 'http://localhost:5173'),
   ],
 
   'db' => [
-    'host' => getenv('DB_HOST') ?: '127.0.0.1',
-    'port' => (int)(getenv('DB_PORT') ?: 3306),
-    'name' => getenv('DB_DATABASE') ?: 'university_library',
-    'user' => getenv('DB_USERNAME') ?: 'root',
-    'pass' => getenv('DB_PASSWORD') ?: '',
+    'host' => $env('DB_HOST', '127.0.0.1'),
+    'port' => (int)$env('DB_PORT', 3306),
+    'name' => $env('DB_DATABASE', 'university_library'),
+    'user' => $env('DB_USERNAME', 'root'),
+    'pass' => $env('DB_PASSWORD', ''),
     'charset' => 'utf8mb4',
-    'timezone' => getenv('DB_TIMEZONE') ?: '+08:00',
+    'timezone' => $env('DB_TIMEZONE', '+08:00'),
   ],
 
   'jwt' => [
@@ -43,18 +60,18 @@ return [
   ],
 
   'email' => [
-    'smtp_host' => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
-    'smtp_port' => (int)(getenv('SMTP_PORT') ?: 587),
+    'smtp_host' => $env('SMTP_HOST', 'smtp.gmail.com'),
+    'smtp_port' => (int)$env('SMTP_PORT', 587),
     'smtp_secure' => 'tls',
-    'smtp_user' => getenv('SMTP_USER') ?: '',
-    'smtp_password' => getenv('SMTP_PASSWORD') ?: '',
-    'from_email' => getenv('FROM_EMAIL') ?: '',
-    'from_name' => getenv('FROM_NAME') ?: 'CVSU Imus Library',
+    'smtp_user' => $env('SMTP_USER', ''),
+    'smtp_password' => $env('SMTP_PASSWORD', ''),
+    'from_email' => $env('FROM_EMAIL', ''),
+    'from_name' => $env('FROM_NAME', 'CVSU Imus Library'),
   ],
 
   'app_script_mail' => [
-    'url' => getenv('GOOGLE_APPS_SCRIPT_MAIL_URL') ?: '',
-    'secret' => getenv('GOOGLE_APPS_SCRIPT_MAIL_SECRET') ?: '',
+    'url' => $env('GOOGLE_APPS_SCRIPT_MAIL_URL', ''),
+    'secret' => $env('GOOGLE_APPS_SCRIPT_MAIL_SECRET', ''),
   ],
 
   'reminders' => [
