@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS registration_otps (
   INDEX idx_registration_otps_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-ALTER TABLE registration_otps
-  ADD COLUMN IF NOT EXISTS used TINYINT(1) NOT NULL DEFAULT 0 AFTER expires_at,
-  ADD COLUMN IF NOT EXISTS used_at DATETIME NULL AFTER used;
-
+-- Add these manually only if they are missing on older MySQL/MariaDB versions:
+-- ALTER TABLE registration_otps ADD COLUMN used TINYINT(1) NOT NULL DEFAULT 0 AFTER expires_at;
+-- ALTER TABLE registration_otps ADD COLUMN used_at DATETIME NULL AFTER used;

@@ -151,6 +151,24 @@ final class AuthController {
     }
   }
 
+  private static function columnExists(PDO $pdo, string $table, string $column): bool {
+    $stmt = $pdo->prepare("
+      SELECT COUNT(*)
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$table, $column]);
+    return (int)$stmt->fetchColumn() > 0;
+  }
+
+  private static function addColumnIfMissing(PDO $pdo, string $table, string $column, string $definition): void {
+    if (!self::columnExists($pdo, $table, $column)) {
+      $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$definition}");
+    }
+  }
+
   private static function ensureRegistrationOtpTable(PDO $pdo): void {
     $pdo->exec("
       CREATE TABLE IF NOT EXISTS registration_otps (
@@ -170,8 +188,8 @@ final class AuthController {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    $pdo->exec("ALTER TABLE registration_otps ADD COLUMN IF NOT EXISTS used TINYINT(1) NOT NULL DEFAULT 0 AFTER expires_at");
-    $pdo->exec("ALTER TABLE registration_otps ADD COLUMN IF NOT EXISTS used_at DATETIME NULL AFTER expires_at");
+    self::addColumnIfMissing($pdo, 'registration_otps', 'used', 'used TINYINT(1) NOT NULL DEFAULT 0 AFTER expires_at');
+    self::addColumnIfMissing($pdo, 'registration_otps', 'used_at', 'used_at DATETIME NULL AFTER used');
   }
 
   private static function ensurePasswordResetsTable(PDO $pdo): void {
@@ -189,12 +207,12 @@ final class AuthController {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    $pdo->exec("ALTER TABLE password_resets ADD COLUMN IF NOT EXISTS user_id INT NULL AFTER id");
+    self::addColumnIfMissing($pdo, 'password_resets', 'user_id', 'user_id INT NULL AFTER id');
   }
 
   private static function ensureUserNameColumns(PDO $pdo): void {
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(60) NULL AFTER id");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(60) NULL AFTER first_name");
+    self::addColumnIfMissing($pdo, 'users', 'first_name', 'first_name VARCHAR(60) NULL AFTER id');
+    self::addColumnIfMissing($pdo, 'users', 'last_name', 'last_name VARCHAR(60) NULL AFTER first_name');
   }
 
   private static function registrationPayloadFromBody(array $b): array {
