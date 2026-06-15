@@ -1,0 +1,27 @@
+FEB 26
+*LOGIN WITH DATABASE
+-forgot password (email verification) - done
+-reset link > after ma reset link babalik na sa login
+
+*HOME PAGE
+-ok, for improvement
+
+*ACTIVITY LOGS
+-time in/out of the students
+-Action/Role/Name
+ >new user
+ >admin - approval of students
+
+*BOOKS (CRUD)
+-add book form (isahan)
+
+----------------
+*USER MANAGEMENT
+-Create User
+ >input type (restrict)
+-
+
+
+
+
+

@@ -1,0 +1,397 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* OpenDyslexic font (local) */
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("./assets/fonts/OpenDyslexic-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("./assets/fonts/OpenDyslexic-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =========================================================
+   GLOBAL ACCESSIBILITY BASE
+   ========================================================= */
+
+/* ✅ Controlled by Accessibility Settings (default stays 18px) */
+html {
+  font-size: var(--app-font-size, 18px);
+  scroll-behavior: smooth;
+}
+
+/* Visible focus states (keyboard navigation) */
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Table horizontal scroll helper */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Modern sidebar scrollbar */
+.app-sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 164, 54, 0.82) rgba(255, 255, 255, 0.08);
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  margin: 8px 0;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d6a436, #b8861f);
+  border: 2px solid #2f4f4c;
+  border-radius: 999px;
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #f0c154, #d6a436);
+}
+
+.app-sidebar-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* =========================================================
+   LEGACY A11Y MODE (UiContext) — KEEP for backward compatibility
+   (Uses: html[data-a11y="on"])
+   ========================================================= */
+html[data-a11y="on"] body {
+  background: #0b1220;
+  color: #f8fafc;
+}
+
+html[data-a11y="on"] .a11y-surface {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+html[data-a11y="on"] .a11y-muted {
+  color: #cbd5e1;
+}
+
+html[data-a11y="on"] .a11y-input {
+  background: #0b1220;
+  color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+html[data-a11y="on"] .a11y-btn {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+html[data-a11y="on"] .a11y-outline {
+  border-color: #64748b;
+}
+
+/* =========================================================
+   NEW ACCESSIBILITY SETTINGS (PWD)
+   - Theme: html.dark (Tailwind class-based dark mode)
+   - High contrast: html.hc
+   - Reduce motion: html.reduce-motion
+   - Dyslexia font: html.dyslexia-font
+   ========================================================= */
+
+/* Reduce motion (toggle + also respect OS setting) */
+html.reduce-motion * {
+  scroll-behavior: auto !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dyslexia-friendly font (note: OpenDyslexic must be loaded to take effect) */
+html.dyslexia-font {
+  font-family: "OpenDyslexic", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Arial, sans-serif !important;
+}
+
+/* =========================================================
+   ✅ IMPROVED HIGH CONTRAST MODE (html.hc)
+   - Thicker borders (2-3px)
+   - Bolder text (font-weight 600-700)
+   - Stronger text colors (black/white)
+   - Works with ANY theme (light, dark, system)
+   - Doesn't force dark background (unlike old version)
+   ========================================================= */
+
+/* Define high contrast color variables */
+html.hc {
+  --hc-text: #000;
+  --hc-bg: #fff;
+  --hc-border: #000;
+  --hc-border-width: 2px;
+}
+
+/* When high contrast + dark mode: invert colors */
+html.hc.dark {
+  --hc-text: #fff;
+  --hc-bg: #000;
+  --hc-border: #fff;
+}
+
+/* ✅ Stronger text colors in HC */
+html.hc p,
+html.hc span,
+html.hc div,
+html.hc label {
+  color: var(--hc-text) !important;
+  font-weight: 500 !important;
+}
+
+html.hc .text-slate-900,
+html.hc .text-slate-800,
+html.hc .text-slate-700,
+html.hc .text-slate-600,
+html.hc .text-slate-500,
+html.hc .text-slate-400,
+html.hc .text-slate-300,
+html.hc .text-slate-200,
+html.hc .text-slate-100,
+html.hc .a11y-muted {
+  color: var(--hc-text) !important;
+}
+
+/* ✅ Bolder headings in HC */
+html.hc h1,
+html.hc h2,
+html.hc h3,
+html.hc h4,
+html.hc h5,
+html.hc h6 {
+  color: var(--hc-text) !important;
+  font-weight: 700 !important;
+}
+
+/* ✅ Stronger borders in HC */
+html.hc .a11y-outline,
+html.hc .border,
+html.hc .border-slate-200,
+html.hc .border-slate-300,
+html.hc .border-slate-400,
+html.hc .border-b,
+html.hc .border-t,
+html.hc .border-l,
+html.hc .border-r {
+  border-color: var(--hc-border) !important;
+  border-width: var(--hc-border-width) !important;
+}
+
+/* ✅ Inputs with strong borders & text in HC */
+html.hc input,
+html.hc select,
+html.hc textarea,
+html.hc .a11y-input {
+  color: var(--hc-text) !important;
+  border-color: var(--hc-border) !important;
+  border-width: var(--hc-border-width) !important;
+  font-weight: 600 !important;
+}
+
+/* ✅ Buttons with high contrast */
+html.hc button {
+  border: var(--hc-border-width) solid var(--hc-border) !important;
+  color: var(--hc-text) !important;
+  font-weight: 600 !important;
+}
+
+/* ✅ Links with underlines in HC */
+html.hc a {
+  text-decoration: underline !important;
+  color: #0000ff !important;
+  font-weight: 600 !important;
+}
+
+html.hc.dark a {
+  color: #6ba3ff !important;
+}
+
+/* ✅ Very strong focus indicator in HC */
+html.hc :focus-visible {
+  outline: 4px solid var(--hc-border) !important;
+  outline-offset: 3px !important;
+}
+
+/* =========================================================
+   DARK MODE FALLBACK (html.dark)
+   This makes Dark visible even if some components lack dark: variants.
+   ========================================================= */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: #0b1220 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .a11y-surface,
+html.dark .bg-white,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-slate-200,
+html.dark [class~="bg-[#e9eff0]"],
+html.dark [class~="bg-[#f7f4ea]"] {
+  background-color: #111827 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .bg-blue-50,
+html.dark .bg-sky-50,
+html.dark .bg-emerald-50,
+html.dark .bg-green-50,
+html.dark .bg-red-50,
+html.dark .bg-rose-50,
+html.dark .bg-purple-50,
+html.dark .bg-violet-50,
+html.dark .bg-amber-50,
+html.dark .bg-yellow-50,
+html.dark .from-sky-50,
+html.dark .from-blue-50,
+html.dark .from-rose-50,
+html.dark .from-purple-50,
+html.dark .from-violet-50,
+html.dark .from-slate-50,
+html.dark .to-slate-100,
+html.dark .to-transparent {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  background-image: none !important;
+}
+
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-white:hover {
+  background-color: #1f2937 !important;
+}
+
+html.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-800 {
+  color: #e5e7eb !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-400,
+html.dark .text-slate-300 {
+  color: #94a3b8 !important;
+}
+
+html.dark [class~="text-[#27553f]"],
+html.dark [class~="text-[#2f4f4c]"] {
+  color: #d1fae5 !important;
+}
+
+html.dark [class~="text-[#d6a436]"] {
+  color: #facc15 !important;
+}
+
+html.dark .border,
+html.dark .border-slate-200,
+html.dark .border-slate-300,
+html.dark .border-slate-400,
+html.dark .border-t,
+html.dark .border-b,
+html.dark .border-l,
+html.dark .border-r {
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea,
+html.dark .a11y-input {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.dark option {
+  background: #111827;
+  color: #f8fafc;
+}
+
+html.dark table,
+html.dark thead,
+html.dark tbody,
+html.dark tr,
+html.dark td,
+html.dark th {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+html.dark thead,
+html.dark .table-scroll thead {
+  background-color: #0f172a !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark tr.bg-white,
+html.dark tr.hover\:bg-slate-50:hover {
+  background-color: #111827 !important;
+}
+
+html.dark tr.hover\:bg-slate-50:hover,
+html.dark tbody tr:hover {
+  background-color: #1f2937 !important;
+}
+
+html.dark button.border,
+html.dark a.border {
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+html.dark button.bg-white,
+html.dark a.bg-white {
+  background-color: #1f2937 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow,
+html.dark .shadow-lg,
+html.dark .shadow-xl,
+html.dark .shadow-2xl {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28) !important;
+}
