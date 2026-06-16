@@ -7,6 +7,7 @@ import {
 } from "../../api/borrow.js";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
 import MessageModal from "../../components/MessageModal.jsx";
+import PromptModal from "../../components/PromptModal.jsx";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
 import { formatDate } from "../../utils/dateTime.js";
@@ -40,6 +41,8 @@ export default function BorrowPendingPage() {
   const [err, setErr] = useState("");
   const [message, setMessage] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [declineAction, setDeclineAction] = useState(null);
+  const [declineReasonError, setDeclineReasonError] = useState("");
   const [working, setWorking] = useState(false);
 
   const params = useMemo(() => ({ status: "pending", page, limit: 10 }), [page]);
@@ -111,15 +114,26 @@ export default function BorrowPendingPage() {
     }
   }
 
-  async function declineMany(ids, reason = "") {
+  async function declineMany(ids, reason) {
+    const cleanReason = String(reason || "").trim();
+    if (!cleanReason) {
+      setDeclineReasonError("Enter a reason before declining the request.");
+      return;
+    }
+
     setWorking(true);
     try {
+      let emailsSent = 0;
       for (const id of ids) {
-        await apiDeclineBorrow(id, reason);
+        const result = await apiDeclineBorrow(id, cleanReason);
+        if (result?.decline_email_sent) emailsSent += 1;
       }
       const count = ids.length;
       voiceAccessibility.announceSuccess(`${count} borrow request(s) declined.`);
-      showMessage("Borrow request declined", `${count} borrow request(s) declined.`);
+      showMessage(
+        "Borrow request declined",
+        `${count} borrow request(s) declined. Email sent for ${emailsSent} of ${count} request(s).`
+      );
       setSelectedIds(new Set());
       await load();
     } catch (e) {
@@ -128,7 +142,8 @@ export default function BorrowPendingPage() {
       showMessage("Decline failed", msg, "error");
     } finally {
       setWorking(false);
-      setConfirmAction(null);
+      setDeclineAction(null);
+      setDeclineReasonError("");
     }
   }
 
@@ -174,7 +189,8 @@ export default function BorrowPendingPage() {
       showMessage("No requests selected", "Select at least one borrow request first.", "error");
       return;
     }
-    setConfirmAction({ type: "bulk-decline", count: selectedIds.size });
+    setDeclineReasonError("");
+    setDeclineAction({ type: "bulk-decline", ids: Array.from(selectedIds), count: selectedIds.size });
   }
 
   function onApprove(id) {
@@ -182,22 +198,19 @@ export default function BorrowPendingPage() {
   }
 
   function onDecline(id) {
-    setConfirmAction({ type: "decline", ids: [id], count: 1 });
+    setDeclineReasonError("");
+    setDeclineAction({ type: "decline", ids: [id], count: 1 });
   }
 
   function confirmTitle() {
     if (confirmAction?.type === "approve") return "Approve request?";
     if (confirmAction?.type === "bulk-approve") return "Approve selected requests?";
-    if (confirmAction?.type === "decline") return "Decline request?";
-    if (confirmAction?.type === "bulk-decline") return "Decline selected requests?";
     return "";
   }
 
   function confirmMessage() {
     if (confirmAction?.type === "approve") return "This borrow request will move to borrowed records.";
     if (confirmAction?.type === "bulk-approve") return `Approve ${confirmAction.count} borrow request(s)?`;
-    if (confirmAction?.type === "decline") return "This borrow request will be declined.";
-    if (confirmAction?.type === "bulk-decline") return `Decline ${confirmAction.count} selected borrow request(s)?`;
     return "";
   }
 
@@ -206,11 +219,11 @@ export default function BorrowPendingPage() {
       await approveOne(confirmAction.id);
     } else if (confirmAction?.type === "bulk-approve") {
       await approveSelected();
-    } else if (confirmAction?.type === "decline") {
-      await declineMany(confirmAction.ids || [], "");
-    } else if (confirmAction?.type === "bulk-decline") {
-      await declineMany(Array.from(selectedIds), "");
     }
+  }
+
+  async function submitDecline(reason) {
+    await declineMany(declineAction?.ids || [], reason);
   }
 
   return (
@@ -428,6 +441,33 @@ export default function BorrowPendingPage() {
         loading={working}
         onCancel={() => setConfirmAction(null)}
         onConfirm={runConfirm}
+      />
+      <PromptModal
+        open={Boolean(declineAction)}
+        title={
+          declineAction?.type === "bulk-decline"
+            ? "Decline selected requests"
+            : "Decline request"
+        }
+        message={
+          declineAction?.type === "bulk-decline"
+            ? `Enter the reason for declining ${declineAction.count} selected request(s).`
+            : "Enter the reason why this request was not approved."
+        }
+        label="Reason for decline"
+        placeholder="Example: Book is unavailable for checkout."
+        confirmText="Decline"
+        tone="danger"
+        multiline
+        required
+        maxLength={1000}
+        loading={working}
+        error={declineReasonError}
+        onCancel={() => {
+          setDeclineAction(null);
+          setDeclineReasonError("");
+        }}
+        onConfirm={submitDecline}
       />
       <MessageModal
         open={Boolean(message)}

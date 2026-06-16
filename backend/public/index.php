@@ -458,7 +458,7 @@ if ($method === 'POST') {
   if ($bid2 !== null) {
     $auth = AuthMiddleware::requireAuth($config);
     AuthMiddleware::requireRole($auth, ['librarian']);
-    BorrowController::decline(pdo($config), $auth, $bid2);
+    BorrowController::decline(pdo($config), $config, $auth, $bid2);
     exit;
   }
 

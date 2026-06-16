@@ -8,6 +8,10 @@ export default function PromptModal({
   placeholder = "",
   defaultValue = "",
   inputMode,
+  multiline = false,
+  required = false,
+  maxLength,
+  error = "",
   confirmText = "Continue",
   cancelText = "Cancel",
   tone = "primary",
@@ -39,15 +43,30 @@ export default function PromptModal({
         ) : null}
         <label className="mt-4 block text-sm font-medium">
           {label}
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={placeholder}
-            inputMode={inputMode}
-            autoFocus
-          />
+          {multiline ? (
+            <textarea
+              className="mt-1 min-h-28 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholder}
+              maxLength={maxLength}
+              autoFocus
+            />
+          ) : (
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholder}
+              inputMode={inputMode}
+              maxLength={maxLength}
+              autoFocus
+            />
+          )}
         </label>
+        {error ? (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-300">{error}</p>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
@@ -61,7 +80,7 @@ export default function PromptModal({
             type="button"
             className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 focus:outline-none focus-visible:ring-2 ${confirmClass}`}
             onClick={() => onConfirm?.(value)}
-            disabled={loading}
+            disabled={loading || (required && value.trim() === "")}
           >
             {loading ? "Loading..." : confirmText}
           </button>

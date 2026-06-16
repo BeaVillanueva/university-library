@@ -97,6 +97,71 @@ CVSU Imus Library";
     return $sent;
   }
 
+  private static function sendDeclineEmail(PDO $pdo, array $config, int $recordId): bool {
+    $stmt = $pdo->prepare("
+      SELECT
+        br.id,
+        br.decline_reason,
+        br.decline_date,
+        br.decline_email_sent,
+        u.name AS student_name,
+        u.email AS student_email,
+        b.title AS book_title
+      FROM borrow_records br
+      JOIN users u ON u.id = br.user_id
+      JOIN books b ON b.id = br.book_id
+      WHERE br.id = ?
+        AND br.status = 'declined'
+      LIMIT 1
+    ");
+    $stmt->execute([$recordId]);
+    $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$record || (int)($record['decline_email_sent'] ?? 0) === 1) {
+      return false;
+    }
+
+    $studentEmail = trim((string)($record['student_email'] ?? ''));
+    if ($studentEmail === '') {
+      return false;
+    }
+
+    $studentName = trim((string)($record['student_name'] ?? 'Student')) ?: 'Student';
+    $bookTitle = (string)($record['book_title'] ?? 'Untitled book');
+    $declineReason = trim((string)($record['decline_reason'] ?? ''));
+    $declineDate = (string)($record['decline_date'] ?? '');
+
+    $subject = "Borrow Request Declined - CVSU Imus Library";
+    $body = "Dear {$studentName},
+
+Your borrowing request has been declined.
+
+Student Name: {$studentName}
+Book Title: {$bookTitle}
+Request Status: Declined
+Reason for Decline: {$declineReason}
+Date of Decline: " . self::formatEmailDate($declineDate) . "
+
+Thank you,
+CVSU Imus Library";
+
+    $emailService = new EmailService($config);
+    $sent = $emailService->send($studentEmail, $subject, $body);
+
+    if ($sent) {
+      $update = $pdo->prepare("
+        UPDATE borrow_records
+        SET decline_email_sent = 1,
+            decline_email_sent_at = NOW()
+        WHERE id = ?
+          AND decline_email_sent = 0
+      ");
+      $update->execute([$recordId]);
+    }
+
+    return $sent;
+  }
+
   public static function processOverdueReminders(PDO $pdo, array $config, array $auth): void {
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
 
@@ -511,16 +576,38 @@ CVSU Imus Library";
    * - changes status pending -> declined
    * - does NOT change copies
    */
-  public static function decline(PDO $pdo, array $auth, int $recordId): void {
-    OverdueService::refresh($pdo);
+  public static function decline(PDO $pdo, array $config, array $auth, int $recordId): void {
+    OverdueService::refresh($pdo, $config);
+    OverdueService::ensureBorrowApprovalColumns($pdo);
 
     AuthMiddleware::requireRole($auth, ['librarian']);
 
     $actorId = (int)$auth['user_id'];
     $b = Http::readJsonBody();
-    $reason = (string)($b['reason'] ?? '');
+    $reason = trim((string)($b['reason'] ?? ''));
+    if ($reason === '') {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'borrow.decline_failed',
+        'entity_type' => 'borrow_record',
+        'entity_id' => $recordId,
+        'details' => ['reason' => 'decline_reason_required'],
+      ]);
+      Http::error('Decline reason is required.', 422);
+    }
 
-    $stmt = $pdo->prepare("SELECT id, user_id, book_id, status FROM borrow_records WHERE id = ? LIMIT 1");
+    if (strlen($reason) > 1000) {
+      Http::error('Decline reason must be 1000 characters or fewer.', 422);
+    }
+
+    $stmt = $pdo->prepare("
+      SELECT br.*, b.title AS book_title, u.name AS student_name, u.email AS student_email
+      FROM borrow_records br
+      JOIN books b ON b.id = br.book_id
+      JOIN users u ON u.id = br.user_id
+      WHERE br.id = ?
+      LIMIT 1
+    ");
     $stmt->execute([$recordId]);
     $rec = $stmt->fetch();
 
@@ -539,8 +626,52 @@ CVSU Imus Library";
       Http::error('Only pending requests can be declined', 409, ['status' => (string)$rec['status']]);
     }
 
-    $upd = $pdo->prepare("UPDATE borrow_records SET status = 'declined' WHERE id = ? AND status = 'pending'");
-    $upd->execute([$recordId]);
+    $declinedAtDateTime = new DateTimeImmutable('now');
+    $declinedAt = $declinedAtDateTime->format('Y-m-d H:i:s');
+    $declineDate = $declinedAtDateTime->format('Y-m-d');
+
+    $pdo->beginTransaction();
+    try {
+      $upd = $pdo->prepare("
+        UPDATE borrow_records
+        SET status = 'declined',
+            decline_reason = ?,
+            decline_date = ?,
+            declined_at = ?
+        WHERE id = ? AND status = 'pending'
+      ");
+      $upd->execute([$reason, $declineDate, $declinedAt, $recordId]);
+
+      if ($upd->rowCount() !== 1) {
+        throw new RuntimeException('Failed to decline request');
+      }
+
+      $pdo->commit();
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+      }
+
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId,
+        'action' => 'borrow.decline_failed',
+        'entity_type' => 'borrow_record',
+        'entity_id' => $recordId,
+        'details' => [
+          'reason' => 'exception',
+          'error' => $e->getMessage(),
+        ],
+      ]);
+
+      Http::error('Decline failed: ' . $e->getMessage(), 500);
+    }
+
+    try {
+      $declineEmailSent = self::sendDeclineEmail($pdo, $config, $recordId);
+    } catch (Throwable $emailError) {
+      error_log('Borrow decline email failed for record ' . $recordId . ': ' . $emailError->getMessage());
+      $declineEmailSent = false;
+    }
 
     ActivityLogger::log($pdo, [
       'actor_user_id' => $actorId,
@@ -550,11 +681,22 @@ CVSU Imus Library";
       'details' => [
         'borrower_user_id' => (int)$rec['user_id'],
         'book_id' => (int)$rec['book_id'],
+        'book_title' => (string)($rec['book_title'] ?? ''),
         'decline_reason' => $reason,
+        'decline_date' => $declineDate,
+        'declined_at' => $declinedAt,
+        'decline_email_sent' => $declineEmailSent,
       ],
     ]);
 
-    Http::ok(['message' => 'Declined', 'record_id' => $recordId]);
+    Http::ok([
+      'message' => 'Declined',
+      'record_id' => $recordId,
+      'status' => 'declined',
+      'decline_reason' => $reason,
+      'decline_date' => $declineDate,
+      'decline_email_sent' => $declineEmailSent,
+    ]);
   }
 
   /**

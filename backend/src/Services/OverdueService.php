@@ -162,6 +162,11 @@ final class OverdueService {
     self::addColumnIfMissing($pdo, 'borrow_records', 'approved_at', 'approved_at DATETIME NULL AFTER approval_date');
     self::addColumnIfMissing($pdo, 'borrow_records', 'approval_email_sent', 'approval_email_sent TINYINT(1) NOT NULL DEFAULT 0');
     self::addColumnIfMissing($pdo, 'borrow_records', 'approval_email_sent_at', 'approval_email_sent_at DATETIME NULL AFTER approval_email_sent');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'decline_reason', 'decline_reason TEXT NULL');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'decline_date', 'decline_date DATE NULL AFTER decline_reason');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'declined_at', 'declined_at DATETIME NULL AFTER decline_date');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'decline_email_sent', 'decline_email_sent TINYINT(1) NOT NULL DEFAULT 0');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'decline_email_sent_at', 'decline_email_sent_at DATETIME NULL AFTER decline_email_sent');
   }
 
   private static function createOverdueNotifications(PDO $pdo, array $config = []): array {
