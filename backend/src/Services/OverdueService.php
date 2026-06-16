@@ -113,6 +113,7 @@ final class OverdueService {
   public static function ensureBorrowDateTimeColumns(PDO $pdo, array $config = []): void {
     self::addColumnIfMissing($pdo, 'borrow_records', 'borrowed_at', 'borrowed_at DATETIME NULL AFTER borrow_date');
     self::addColumnIfMissing($pdo, 'borrow_records', 'due_at', 'due_at DATETIME NULL AFTER due_date');
+    self::ensureBorrowApprovalColumns($pdo);
 
     $pdo->exec("
       UPDATE borrow_records
@@ -154,6 +155,13 @@ final class OverdueService {
           OR TIME(due_at) = '00:00:00'
         )
     ");
+  }
+
+  public static function ensureBorrowApprovalColumns(PDO $pdo): void {
+    self::addColumnIfMissing($pdo, 'borrow_records', 'approval_date', 'approval_date DATE NULL AFTER book_id');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'approved_at', 'approved_at DATETIME NULL AFTER approval_date');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'approval_email_sent', 'approval_email_sent TINYINT(1) NOT NULL DEFAULT 0');
+    self::addColumnIfMissing($pdo, 'borrow_records', 'approval_email_sent_at', 'approval_email_sent_at DATETIME NULL AFTER approval_email_sent');
   }
 
   private static function createOverdueNotifications(PDO $pdo, array $config = []): array {

@@ -2,6 +2,101 @@
 declare(strict_types=1);
 
 final class BorrowController {
+  private static function nextLibraryPickupDate(DateTimeImmutable $approvedAt): DateTimeImmutable {
+    $startDate = $approvedAt->modify('+1 day');
+    if ($startDate->format('w') === '0') {
+      $startDate = $startDate->modify('+1 day');
+    }
+    return $startDate;
+  }
+
+  private static function addLibraryDaysSkippingSundays(DateTimeImmutable $startDate, int $libraryDays): DateTimeImmutable {
+    $date = $startDate;
+    $countedDays = 0;
+
+    while ($countedDays < $libraryDays) {
+      $date = $date->modify('+1 day');
+      if ($date->format('w') !== '0') {
+        $countedDays++;
+      }
+    }
+
+    return $date;
+  }
+
+  private static function formatEmailDate(string $date): string {
+    $parsed = DateTimeImmutable::createFromFormat('Y-m-d', $date);
+    return $parsed instanceof DateTimeImmutable ? $parsed->format('F j, Y') : $date;
+  }
+
+  private static function sendApprovalEmail(PDO $pdo, array $config, int $recordId): bool {
+    $stmt = $pdo->prepare("
+      SELECT
+        br.id,
+        br.approval_date,
+        br.borrow_date,
+        br.due_date,
+        br.approval_email_sent,
+        u.name AS student_name,
+        u.email AS student_email,
+        b.title AS book_title
+      FROM borrow_records br
+      JOIN users u ON u.id = br.user_id
+      JOIN books b ON b.id = br.book_id
+      WHERE br.id = ?
+        AND br.status = 'borrowed'
+      LIMIT 1
+    ");
+    $stmt->execute([$recordId]);
+    $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$record || (int)($record['approval_email_sent'] ?? 0) === 1) {
+      return false;
+    }
+
+    $studentEmail = trim((string)($record['student_email'] ?? ''));
+    if ($studentEmail === '') {
+      return false;
+    }
+
+    $studentName = trim((string)($record['student_name'] ?? 'Student')) ?: 'Student';
+    $bookTitle = (string)($record['book_title'] ?? 'Untitled book');
+    $approvalDate = (string)($record['approval_date'] ?? '');
+    $startDate = (string)($record['borrow_date'] ?? '');
+    $dueDate = (string)($record['due_date'] ?? '');
+
+    $subject = "Borrow Request Approved - CVSU Imus Library";
+    $body = "Dear {$studentName},
+
+Your borrowing request has been approved.
+
+Book Title: {$bookTitle}
+Approval Date: " . self::formatEmailDate($approvalDate) . "
+Pickup/Start Date: " . self::formatEmailDate($startDate) . "
+Due Date: " . self::formatEmailDate($dueDate) . "
+
+Reminder: Sundays are not counted in the borrowing period.
+
+Thank you,
+CVSU Imus Library";
+
+    $emailService = new EmailService($config);
+    $sent = $emailService->send($studentEmail, $subject, $body);
+
+    if ($sent) {
+      $update = $pdo->prepare("
+        UPDATE borrow_records
+        SET approval_email_sent = 1,
+            approval_email_sent_at = NOW()
+        WHERE id = ?
+          AND approval_email_sent = 0
+      ");
+      $update->execute([$recordId]);
+    }
+
+    return $sent;
+  }
+
   public static function processOverdueReminders(PDO $pdo, array $config, array $auth): void {
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
 
@@ -29,6 +124,7 @@ final class BorrowController {
   public static function borrow(PDO $pdo, array $config, array $auth): void {
     OverdueService::refresh($pdo, $config);
     OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
+    OverdueService::ensureBorrowApprovalColumns($pdo);
 
     // ✅ Student-only (extra safety kahit naka student-only na sa index.php)
     AuthMiddleware::requireRole($auth, ['student']);
@@ -279,15 +375,17 @@ final class BorrowController {
   public static function approve(PDO $pdo, array $config, array $auth, int $recordId): void {
     OverdueService::refresh($pdo, $config);
     OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
+    OverdueService::ensureBorrowApprovalColumns($pdo);
 
     AuthMiddleware::requireRole($auth, ['librarian']);
 
     $actorId = (int)$auth['user_id'];
 
     $stmt = $pdo->prepare("
-      SELECT br.*, b.title AS book_title, b.copies_available
+      SELECT br.*, b.title AS book_title, b.copies_available, u.name AS student_name, u.email AS student_email
       FROM borrow_records br
       JOIN books b ON b.id = br.book_id
+      JOIN users u ON u.id = br.user_id
       WHERE br.id = ?
       LIMIT 1
     ");
@@ -315,12 +413,16 @@ final class BorrowController {
 
     $pdo->beginTransaction();
     try {
-      $borrowedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
-      $dueAt = (new DateTimeImmutable('now'))
-        ->modify('+' . (int)$config['library']['borrow_days'] . ' days')
-        ->format('Y-m-d H:i:s');
-      $borrowDate = substr($borrowedAt, 0, 10);
-      $dueDate = substr($dueAt, 0, 10);
+      $approvedDateTime = new DateTimeImmutable('now');
+      $startDateTime = self::nextLibraryPickupDate($approvedDateTime);
+      $dueDateTime = self::addLibraryDaysSkippingSundays($startDateTime, 14);
+
+      $approvedAt = $approvedDateTime->format('Y-m-d H:i:s');
+      $approvalDate = $approvedDateTime->format('Y-m-d');
+      $borrowedAt = $startDateTime->format('Y-m-d H:i:s');
+      $borrowDate = $startDateTime->format('Y-m-d');
+      $dueAt = $dueDateTime->setTime(23, 59, 59)->format('Y-m-d H:i:s');
+      $dueDate = $dueDateTime->format('Y-m-d');
 
       $updBook = $pdo->prepare("
         UPDATE books
@@ -335,18 +437,27 @@ final class BorrowController {
       $updRec = $pdo->prepare("
         UPDATE borrow_records
         SET status = 'borrowed',
+            approval_date = ?,
+            approved_at = ?,
             borrow_date = ?,
             borrowed_at = ?,
             due_date = ?,
             due_at = ?
         WHERE id = ? AND status = 'pending'
       ");
-      $updRec->execute([$borrowDate, $borrowedAt, $dueDate, $dueAt, $recordId]);
+      $updRec->execute([$approvalDate, $approvedAt, $borrowDate, $borrowedAt, $dueDate, $dueAt, $recordId]);
       if ($updRec->rowCount() !== 1) {
         throw new RuntimeException('Failed to approve request');
       }
 
       $pdo->commit();
+
+      try {
+        $approvalEmailSent = self::sendApprovalEmail($pdo, $config, $recordId);
+      } catch (Throwable $emailError) {
+        error_log('Borrow approval email failed for record ' . $recordId . ': ' . $emailError->getMessage());
+        $approvalEmailSent = false;
+      }
 
       ActivityLogger::log($pdo, [
         'actor_user_id' => $actorId,
@@ -357,16 +468,30 @@ final class BorrowController {
           'borrower_user_id' => (int)$rec['user_id'],
           'book_id' => (int)$rec['book_id'],
           'book_title' => (string)($rec['book_title'] ?? ''),
+          'approval_date' => $approvalDate,
+          'approved_at' => $approvedAt,
+          'borrow_date' => $borrowDate,
           'borrowed_at' => $borrowedAt,
+          'due_date' => $dueDate,
           'due_at' => $dueAt,
+          'approval_email_sent' => $approvalEmailSent,
         ],
       ]);
 
       OverdueService::refresh($pdo, $config);
 
-      Http::ok(['message' => 'Approved', 'record_id' => $recordId]);
+      Http::ok([
+        'message' => 'Approved',
+        'record_id' => $recordId,
+        'approval_date' => $approvalDate,
+        'borrow_date' => $borrowDate,
+        'due_date' => $dueDate,
+        'approval_email_sent' => $approvalEmailSent,
+      ]);
     } catch (Throwable $e) {
-      $pdo->rollBack();
+      if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+      }
       ActivityLogger::log($pdo, [
         'actor_user_id' => $actorId,
         'action' => 'borrow.approve_failed',
