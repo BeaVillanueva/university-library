@@ -366,6 +366,14 @@ if (in_array($method, ['PUT','PATCH'], true)) {
     exit;
   }
 
+  $dueDateBorrowId = Path::matchSuffixId($path, '/borrow/', '/due-date');
+  if ($dueDateBorrowId !== null) {
+    $auth = AuthMiddleware::requireAuth($config);
+    AuthMiddleware::requireRole($auth, ['admin','librarian']);
+    BorrowController::updateDueDate(pdo($config), $config, $auth, $dueDateBorrowId);
+    exit;
+  }
+
   $aid = Path::matchId($path, '/announcements/');
   if ($aid !== null) {
     $auth = AuthMiddleware::requireAuth($config);

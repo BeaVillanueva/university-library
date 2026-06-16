@@ -14,6 +14,8 @@ function formatAction(action) {
 
     "borrow.borrow": "Borrowed book",
     "borrow.return": "Returned book",
+    "borrow.due_date_update": "Updated due date",
+    "borrow.due_date_update_failed": "Due date update failed",
     "borrow.overdue": "Marked overdue",
     "borrow.overdue_email_sent": "Overdue email sent",
     "borrow.overdue_email_failed": "Overdue email failed",
@@ -69,6 +71,13 @@ function formatDescription(action, details) {
     const book = details.book_title || details.book_id || "a book";
     const who = details.borrower_name || details.borrower_email;
     return `Returned ${book}${who ? ` from ${who}` : ""}`;
+  }
+  if (action === "borrow.due_date_update") {
+    const book = details.book_title || details.book_id || "a book";
+    const who = details.borrower_name || details.borrower_email;
+    const from = details.old_due_date || "previous date";
+    const to = details.new_due_date || "new date";
+    return `Changed due date for ${book}${who ? ` for ${who}` : ""} from ${from} to ${to}`;
   }
   if (action === "borrow.overdue") {
     const book = details.book_title || details.book_id || "a book";

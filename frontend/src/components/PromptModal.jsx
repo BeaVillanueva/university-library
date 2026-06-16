@@ -7,6 +7,7 @@ export default function PromptModal({
   label,
   placeholder = "",
   defaultValue = "",
+  inputType = "text",
   inputMode,
   multiline = false,
   required = false,
@@ -54,6 +55,7 @@ export default function PromptModal({
             />
           ) : (
             <input
+              type={inputType}
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               value={value}
               onChange={(e) => setValue(e.target.value)}

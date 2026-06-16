@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useVoiceAnnouncements } from "../../hooks/useVoiceAnnouncements";
 import { voiceAccessibility } from "../../utils/voiceAccessibility";
+import { useAuth } from "../../state/AuthContext.jsx";
 import Pagination from "../../components/Pagination.jsx";
 import ConfirmModal from "../../components/ConfirmModal.jsx";
 import MessageModal from "../../components/MessageModal.jsx";
-import { apiListAllBorrows, apiReturnBorrow } from "../../api/borrow.js";
+import PromptModal from "../../components/PromptModal.jsx";
+import { apiListAllBorrows, apiReturnBorrow, apiUpdateBorrowDueDate } from "../../api/borrow.js";
 import { formatDate, formatTime } from "../../utils/dateTime.js";
 
 function fmt(s) {
@@ -33,6 +35,8 @@ function fmtTimeFromTimestamp(ts) {
 }
 
 export default function BorrowBorrowedPage() {
+  const { user } = useAuth();
+  const canReturn = user?.role === "librarian";
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,6 +51,9 @@ export default function BorrowBorrowedPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isReturning, setIsReturning] = useState(false);
   const [returnTarget, setReturnTarget] = useState(null);
+  const [dueDateTarget, setDueDateTarget] = useState(null);
+  const [dueDateError, setDueDateError] = useState("");
+  const [dueDateSaving, setDueDateSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   // ✅ status=active => borrowed + overdue (return_date IS NULL)
@@ -99,6 +106,57 @@ export default function BorrowBorrowedPage() {
 
   function showMessage(title, body, tone = "success") {
     setMessage({ title, body, tone });
+  }
+
+  function isSunday(dateValue) {
+    if (!dateValue) return false;
+    const [year, month, day] = String(dateValue).slice(0, 10).split("-").map(Number);
+    if (!year || !month || !day) return false;
+    return new Date(year, month - 1, day).getDay() === 0;
+  }
+
+  function onEditDueDate(record) {
+    setDueDateError("");
+    setDueDateTarget({
+      id: record.id,
+      title: record.title,
+      borrowDate: String(record.borrow_date || "").slice(0, 10),
+      dueDate: String(record.due_date || "").slice(0, 10),
+    });
+  }
+
+  async function saveDueDate(nextDueDate) {
+    const cleanDate = String(nextDueDate || "").slice(0, 10);
+    const borrowDate = String(dueDateTarget?.borrowDate || "").slice(0, 10);
+
+    setDueDateError("");
+    if (!cleanDate) {
+      setDueDateError("Choose a new due date.");
+      return;
+    }
+    if (borrowDate && cleanDate < borrowDate) {
+      setDueDateError("New due date cannot be earlier than the borrow/start date.");
+      return;
+    }
+    if (isSunday(cleanDate)) {
+      setDueDateError("Due date cannot fall on Sunday. Please choose Monday or another library day.");
+      return;
+    }
+
+    setDueDateSaving(true);
+    try {
+      await apiUpdateBorrowDueDate(dueDateTarget.id, cleanDate);
+      setSuccess("Due date updated successfully.");
+      voiceAccessibility.announceSuccess("Due date updated successfully.");
+      showMessage("Due date updated", "The student's borrowed book due date was updated.");
+      setDueDateTarget(null);
+      await load();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || "Failed to update due date.";
+      setDueDateError(msg);
+    } finally {
+      setDueDateSaving(false);
+    }
   }
 
   async function returnOne(id) {
@@ -178,7 +236,9 @@ export default function BorrowBorrowedPage() {
         <div>
           <h1 className="text-xl font-semibold">Borrowed / Return</h1>
           <p className="mt-1 text-sm text-slate-600 a11y-muted">
-            Active borrowed records. Select books and use Bulk Return to process multiple returns at once.
+            {canReturn
+              ? "Active borrowed records. Select books and use Bulk Return to process multiple returns at once."
+              : "Active borrowed records. Change due dates for approved borrowed books."}
           </p>
         </div>
         <button
@@ -236,7 +296,7 @@ export default function BorrowBorrowedPage() {
       </div>
 
       {/* Bulk action toolbar */}
-      {items.length > 0 && (
+      {canReturn && items.length > 0 && (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-blue-50 p-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
@@ -285,15 +345,17 @@ export default function BorrowBorrowedPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-4 py-3 w-12">
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 rounded cursor-pointer"
-                    checked={selectedIds.size === items.length && items.length > 0}
-                    onChange={toggleAll}
-                    aria-label="Select all books"
-                  />
-                </th>
+                {canReturn ? (
+                  <th className="px-4 py-3 w-12">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 rounded cursor-pointer"
+                      checked={selectedIds.size === items.length && items.length > 0}
+                      onChange={toggleAll}
+                      aria-label="Select all books"
+                    />
+                  </th>
+                ) : null}
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Student No</th>
                 <th className="px-4 py-3">Book</th>
@@ -307,13 +369,13 @@ export default function BorrowBorrowedPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600" colSpan={8}>
+                  <td className="px-4 py-4 text-slate-600" colSpan={canReturn ? 8 : 7}>
                     Loading…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-600" colSpan={8}>
+                  <td className="px-4 py-4 text-slate-600" colSpan={canReturn ? 8 : 7}>
                     No borrowed books.
                   </td>
                 </tr>
@@ -323,15 +385,17 @@ export default function BorrowBorrowedPage() {
                     key={r.id}
                     className={`transition-colors ${selectedIds.has(r.id) ? "bg-blue-50" : "bg-white"}`}
                   >
-                    <td className="px-4 py-4">
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded cursor-pointer"
-                        checked={selectedIds.has(r.id)}
-                        onChange={() => toggleItem(r.id)}
-                        aria-label={`Select ${fmt(r.title)}`}
-                      />
-                    </td>
+                    {canReturn ? (
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 rounded cursor-pointer"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleItem(r.id)}
+                          aria-label={`Select ${fmt(r.title)}`}
+                        />
+                      </td>
+                    ) : null}
 
                     <td className="px-4 py-4">
                       <div className="font-semibold text-slate-800">{fmt(r.user_name)}</div>
@@ -370,13 +434,23 @@ export default function BorrowBorrowedPage() {
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
                         <button
-                          className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                          onClick={() => onReturn(r.id)}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={() => onEditDueDate(r)}
                           type="button"
-                          aria-label={`Return ${fmt(r.title)}`}
+                          aria-label={`Change due date for ${fmt(r.title)}`}
                         >
-                          Return
+                          Change Due Date
                         </button>
+                        {canReturn ? (
+                          <button
+                            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                            onClick={() => onReturn(r.id)}
+                            type="button"
+                            aria-label={`Return ${fmt(r.title)}`}
+                          >
+                            Return
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -407,6 +481,27 @@ export default function BorrowBorrowedPage() {
             ? bulkReturnSelected()
             : returnOne(returnTarget.id)
         }
+      />
+      <PromptModal
+        open={Boolean(dueDateTarget)}
+        title="Change Due Date"
+        message={
+          dueDateTarget
+            ? `Update the due date for "${fmt(dueDateTarget.title)}". Borrow/start date: ${formatDate(dueDateTarget.borrowDate, "—")}.`
+            : ""
+        }
+        label="New due date"
+        inputType="date"
+        defaultValue={dueDateTarget?.dueDate || ""}
+        required
+        error={dueDateError}
+        confirmText="Save Due Date"
+        loading={dueDateSaving}
+        onCancel={() => {
+          setDueDateTarget(null);
+          setDueDateError("");
+        }}
+        onConfirm={saveDueDate}
       />
       <MessageModal
         open={Boolean(message)}

@@ -36,6 +36,12 @@ export async function apiReturnBorrow(recordId) {
   return res.data;
 }
 
+/** Admin/Librarian: update the due date for an active borrowed book */
+export async function apiUpdateBorrowDueDate(recordId, dueDate) {
+  const res = await http.patch(`/borrow/${recordId}/due-date`, { due_date: dueDate });
+  return res.data;
+}
+
 /** Student: cancel a pending borrow request */
 export async function apiCancelBorrow(recordId) {
   const res = await http.post(`/borrow/${recordId}/cancel`, {});

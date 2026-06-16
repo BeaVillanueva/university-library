@@ -162,6 +162,30 @@ CVSU Imus Library";
     return $sent;
   }
 
+  private static function sendDueDateUpdatedEmail(array $config, array $record, string $newDueDate): bool {
+    $studentEmail = trim((string)($record['student_email'] ?? ''));
+    if ($studentEmail === '') {
+      return false;
+    }
+
+    $studentName = trim((string)($record['student_name'] ?? 'Student')) ?: 'Student';
+    $bookTitle = (string)($record['book_title'] ?? 'Untitled book');
+
+    $subject = "Book Due Date Updated";
+    $body = "Hello {$studentName},
+
+The due date for your borrowed book \"{$bookTitle}\" has been updated.
+
+New Due Date: " . self::formatEmailDate($newDueDate) . "
+
+Please return the book on or before the updated due date.
+
+Thank you.";
+
+    $emailService = new EmailService($config);
+    return $emailService->send($studentEmail, $subject, $body);
+  }
+
   private static function repairShortPendingDueDates(PDO $pdo, array $config): void {
     $borrowDays = (int)($config['library']['borrow_days'] ?? 14);
     if ($borrowDays <= 1) {
@@ -917,6 +941,152 @@ CVSU Imus Library";
 
       Http::error('Return failed: ' . $e->getMessage(), 500);
     }
+  }
+
+  public static function updateDueDate(PDO $pdo, array $config, array $auth, int $recordId): void {
+    OverdueService::refresh($pdo, $config);
+    OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
+
+    AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
+
+    $actorId = (int)($auth['user_id'] ?? 0);
+    $body = Http::readJsonBody();
+    $newDueDate = trim((string)($body['due_date'] ?? $body['new_due_date'] ?? ''));
+
+    if ($newDueDate === '') {
+      Http::error('New due date is required.', 422);
+    }
+
+    $parsedDueDate = DateTimeImmutable::createFromFormat('!Y-m-d', $newDueDate);
+    if (!$parsedDueDate || $parsedDueDate->format('Y-m-d') !== $newDueDate) {
+      Http::error('New due date must be a valid date.', 422);
+    }
+
+    if ($parsedDueDate->format('w') === '0') {
+      Http::error('Due date cannot fall on Sunday. Please choose Monday or another library day.', 422);
+    }
+
+    $stmt = $pdo->prepare("
+      SELECT
+        br.*,
+        u.name AS student_name,
+        u.email AS student_email,
+        b.title AS book_title
+      FROM borrow_records br
+      JOIN users u ON u.id = br.user_id
+      JOIN books b ON b.id = br.book_id
+      WHERE br.id = ?
+      LIMIT 1
+    ");
+    $stmt->execute([$recordId]);
+    $rec = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$rec) {
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId ?: null,
+        'action' => 'borrow.due_date_update_failed',
+        'entity_type' => 'borrow_record',
+        'entity_id' => $recordId,
+        'details' => ['reason' => 'record_not_found'],
+      ]);
+      Http::error('Record not found', 404);
+    }
+
+    if ($rec['return_date'] !== null || !in_array((string)$rec['status'], ['borrowed', 'overdue'], true)) {
+      Http::error('Only active borrowed or overdue records can have their due date changed.', 409, [
+        'status' => (string)($rec['status'] ?? ''),
+      ]);
+    }
+
+    $borrowDate = trim((string)($rec['borrow_date'] ?? ''));
+    $parsedBorrowDate = DateTimeImmutable::createFromFormat('!Y-m-d', $borrowDate);
+    if (!$parsedBorrowDate) {
+      Http::error('Borrow/start date is missing for this record.', 422);
+    }
+
+    if ($parsedDueDate < $parsedBorrowDate) {
+      Http::error('New due date cannot be earlier than the borrow/start date.', 422);
+    }
+
+    $newDueAt = $parsedDueDate->setTime(23, 59, 59);
+    $now = new DateTimeImmutable('now');
+    $newStatus = $now > $newDueAt ? 'overdue' : 'borrowed';
+    $oldDueDate = (string)($rec['due_date'] ?? '');
+    $oldStatus = (string)($rec['status'] ?? '');
+
+    $pdo->beginTransaction();
+    try {
+      $upd = $pdo->prepare("
+        UPDATE borrow_records
+        SET due_date = ?,
+            due_at = ?,
+            status = ?
+        WHERE id = ?
+          AND return_date IS NULL
+          AND status IN ('borrowed','overdue')
+      ");
+      $upd->execute([
+        $newDueDate,
+        $newDueAt->format('Y-m-d H:i:s'),
+        $newStatus,
+        $recordId,
+      ]);
+
+      $pdo->commit();
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+      }
+
+      ActivityLogger::log($pdo, [
+        'actor_user_id' => $actorId ?: null,
+        'action' => 'borrow.due_date_update_failed',
+        'entity_type' => 'borrow_record',
+        'entity_id' => $recordId,
+        'details' => [
+          'reason' => 'exception',
+          'error' => $e->getMessage(),
+        ],
+      ]);
+
+      Http::error('Due date update failed: ' . $e->getMessage(), 500);
+    }
+
+    try {
+      $emailSent = self::sendDueDateUpdatedEmail($config, $rec, $newDueDate);
+    } catch (Throwable $emailError) {
+      error_log('Due date update email failed for record ' . $recordId . ': ' . $emailError->getMessage());
+      $emailSent = false;
+    }
+
+    ActivityLogger::log($pdo, [
+      'actor_user_id' => $actorId ?: null,
+      'action' => 'borrow.due_date_update',
+      'entity_type' => 'borrow_record',
+      'entity_id' => $recordId,
+      'details' => [
+        'borrower_user_id' => (int)$rec['user_id'],
+        'borrower_name' => (string)($rec['student_name'] ?? ''),
+        'borrower_email' => (string)($rec['student_email'] ?? ''),
+        'book_id' => (int)$rec['book_id'],
+        'book_title' => (string)($rec['book_title'] ?? ''),
+        'borrow_date' => $borrowDate,
+        'old_due_date' => $oldDueDate,
+        'new_due_date' => $newDueDate,
+        'old_status' => $oldStatus,
+        'new_status' => $newStatus,
+        'email_sent' => $emailSent,
+      ],
+    ]);
+
+    Http::ok([
+      'message' => 'Due date updated.',
+      'record_id' => $recordId,
+      'due_date' => $newDueDate,
+      'due_at' => $newDueAt->format('Y-m-d H:i:s'),
+      'status' => $newStatus,
+      'email_sent' => $emailSent,
+    ]);
   }
 
   /**

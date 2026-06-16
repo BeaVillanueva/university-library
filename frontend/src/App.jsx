@@ -114,7 +114,7 @@ export default function App() {
         <Route
           path="librarian/borrowing/borrowed"
           element={
-            <ProtectedRoute roles={["librarian"]}>
+            <ProtectedRoute roles={["admin", "librarian"]}>
               <BorrowBorrowedPage />
             </ProtectedRoute>
           }
@@ -123,7 +123,7 @@ export default function App() {
         <Route
           path="librarian/borrowing/overdue"
           element={
-            <ProtectedRoute roles={["librarian"]}>
+            <ProtectedRoute roles={["admin", "librarian"]}>
               <BorrowOverdueListPage />
             </ProtectedRoute>
           }
@@ -132,7 +132,7 @@ export default function App() {
         <Route
           path="librarian/borrowing/history"
           element={
-            <ProtectedRoute roles={["librarian"]}>
+            <ProtectedRoute roles={["admin", "librarian"]}>
               <BorrowAllHistoryPage />
             </ProtectedRoute>
           }

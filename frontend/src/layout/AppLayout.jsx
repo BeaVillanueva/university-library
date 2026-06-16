@@ -434,15 +434,17 @@ export default function AppLayout() {
                 />
               )}
 
-              {isLibrarian && (
+              {(isAdmin || isLibrarian) && (
                 <>
-                  <LinkItem
-                    to="/app/librarian/import"
-                    label="Import Books (CSV)"
-                    icon={FiUpload}
-                    onNavigate={onNavigate}
-                    collapsed={collapsed}
-                  />
+                  {isLibrarian && (
+                    <LinkItem
+                      to="/app/librarian/import"
+                      label="Import Books (CSV)"
+                      icon={FiUpload}
+                      onNavigate={onNavigate}
+                      collapsed={collapsed}
+                    />
+                  )}
 
                   <div>
                     <button
@@ -477,14 +479,16 @@ export default function AppLayout() {
 
                     {borrowingOpen && !collapsed && (
                       <div className="mt-1 space-y-1">
-                        <SubLinkItem
-                          to="/app/librarian/borrowing/pending"
-                          label="Pending Approvals"
-                          onNavigate={onNavigate}
-                          collapsed={collapsed}
-                          end
-                          badge={pendingBorrowsCount}
-                        />
+                        {isLibrarian && (
+                          <SubLinkItem
+                            to="/app/librarian/borrowing/pending"
+                            label="Pending Approvals"
+                            onNavigate={onNavigate}
+                            collapsed={collapsed}
+                            end
+                            badge={pendingBorrowsCount}
+                          />
+                        )}
                         <SubLinkItem
                           to="/app/librarian/borrowing/borrowed"
                           label="Borrowed / Return"
