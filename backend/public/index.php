@@ -215,7 +215,7 @@ $router->add('GET', '/borrow/my', function () use ($config) {
 $router->add('GET', '/borrow/all', function () use ($config) {
   $auth = AuthMiddleware::requireAuth($config);
   AuthMiddleware::requireRole($auth, ['admin','librarian']);
-  BorrowController::listAll(pdo($config), $auth);
+  BorrowController::listAll(pdo($config), $config, $auth);
 });
 
 /**

@@ -162,6 +162,49 @@ CVSU Imus Library";
     return $sent;
   }
 
+  private static function repairShortPendingDueDates(PDO $pdo, array $config): void {
+    $borrowDays = (int)($config['library']['borrow_days'] ?? 14);
+    if ($borrowDays <= 1) {
+      return;
+    }
+
+    $stmt = $pdo->query("
+      SELECT id, borrow_date, borrowed_at, due_date
+      FROM borrow_records
+      WHERE status = 'pending'
+        AND borrow_date IS NOT NULL
+        AND due_date <= DATE_ADD(borrow_date, INTERVAL 1 DAY)
+      LIMIT 200
+    ");
+
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    if (!$rows) {
+      return;
+    }
+
+    $update = $pdo->prepare("
+      UPDATE borrow_records
+      SET due_date = ?,
+          due_at = ?
+      WHERE id = ?
+        AND status = 'pending'
+    ");
+
+    foreach ($rows as $row) {
+      $borrowedAt = trim((string)($row['borrowed_at'] ?? ''));
+      $borrowDate = trim((string)($row['borrow_date'] ?? ''));
+      $base = $borrowedAt !== ''
+        ? new DateTimeImmutable($borrowedAt)
+        : new DateTimeImmutable($borrowDate . ' 00:00:00');
+      $dueDateTime = self::addLibraryDaysSkippingSundays($base, $borrowDays);
+      $update->execute([
+        $dueDateTime->format('Y-m-d'),
+        $dueDateTime->setTime(23, 59, 59)->format('Y-m-d H:i:s'),
+        (int)$row['id'],
+      ]);
+    }
+  }
+
   public static function processOverdueReminders(PDO $pdo, array $config, array $auth): void {
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
 
@@ -366,12 +409,13 @@ CVSU Imus Library";
       Http::error('No copies available', 409);
     }
 
-    $borrowedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
-    $dueAt = (new DateTimeImmutable('now'))
-      ->modify('+' . (int)$config['library']['borrow_days'] . ' days')
-      ->format('Y-m-d H:i:s');
-    $borrowDate = substr($borrowedAt, 0, 10);
-    $dueDate = substr($dueAt, 0, 10);
+    $borrowDateTime = new DateTimeImmutable('now');
+    $borrowDays = (int)($config['library']['borrow_days'] ?? 14);
+    $dueDateTime = self::addLibraryDaysSkippingSundays($borrowDateTime, $borrowDays);
+    $borrowedAt = $borrowDateTime->format('Y-m-d H:i:s');
+    $borrowDate = $borrowDateTime->format('Y-m-d');
+    $dueAt = $dueDateTime->setTime(23, 59, 59)->format('Y-m-d H:i:s');
+    $dueDate = $dueDateTime->format('Y-m-d');
 
     // ✅ always pending (approval required)
     $status = 'pending';
@@ -480,7 +524,8 @@ CVSU Imus Library";
     try {
       $approvedDateTime = new DateTimeImmutable('now');
       $startDateTime = self::nextLibraryPickupDate($approvedDateTime);
-      $dueDateTime = self::addLibraryDaysSkippingSundays($startDateTime, 14);
+      $borrowDays = (int)($config['library']['borrow_days'] ?? 14);
+      $dueDateTime = self::addLibraryDaysSkippingSundays($startDateTime, $borrowDays);
 
       $approvedAt = $approvedDateTime->format('Y-m-d H:i:s');
       $approvalDate = $approvedDateTime->format('Y-m-d');
@@ -914,8 +959,10 @@ CVSU Imus Library";
   /**
    * List all records (Admin or Librarian ONLY) - view-only
    */
-  public static function listAll(PDO $pdo, array $auth): void {
-    OverdueService::refresh($pdo);
+  public static function listAll(PDO $pdo, array $config, array $auth): void {
+    OverdueService::refresh($pdo, $config);
+    OverdueService::ensureBorrowDateTimeColumns($pdo, $config);
+    self::repairShortPendingDueDates($pdo, $config);
 
     AuthMiddleware::requireRole($auth, ['admin', 'librarian']);
 
